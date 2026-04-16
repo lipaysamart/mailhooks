@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  mailhooks:
+    build: .
+    container_name: mailhooks
+    restart: unless-stopped
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - SYNC_INTERVAL=${SYNC_INTERVAL:-300}
