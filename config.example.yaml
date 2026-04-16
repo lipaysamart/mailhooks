@@ -1,0 +1,91 @@
+# MailHooks Configuration Example
+# Copy this file to config.yaml and modify as needed
+
+# Log level: debug/info/warn/error
+log_level: info
+
+# Sync interval in seconds
+sync_interval: 300
+
+# Email accounts to sync
+accounts:
+  - name: "gmail"
+    host: "imap.gmail.com"
+    port: 993
+    username: "your-email@gmail.com"
+    password: "${GMAIL_PASSWORD}"
+    folders:
+      - "INBOX"
+      
+  - name: "outlook"
+    host: "imap-mail.outlook.com"
+    port: 993
+    username: "your-email@outlook.com"
+    password: "${OUTLOOK_PASSWORD}"
+    folders:
+      - "INBOX"
+
+# Webhook endpoints
+webhooks:
+  - name: "telegram"
+    url: "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
+    method: "POST"
+    headers:
+      Content-Type: "application/json"
+    timeout: 10
+    retry:
+      count: 3
+      delay: 5
+    template: |
+      {
+        "chat_id": "${TELEGRAM_CHAT_ID}",
+        "text": "📧 New Email\nFrom: {{from_name}} <{{from_addr}}>\nSubject: {{subject}}\n\n{{text}}"
+      }
+      
+  - name: "custom"
+    url: "https://your-server.com/webhook"
+    method: "POST"
+    headers:
+      Authorization: "Bearer ${WEBHOOK_TOKEN}"
+    timeout: 10
+    retry:
+      count: 3
+      delay: 5
+    template: |
+      {
+        "email_id": "{{id}}",
+        "from": "{{from_addr}}",
+        "subject": "{{subject}}",
+        "body": "{{text}}"
+      }
+
+# Email filtering rules (matched in order)
+rules:
+  - name: "urgent"
+    enabled: true
+    match:
+      from:
+        - "boss@company.com"
+        - "*@urgent.com"
+      subject:
+        - "urgent"
+        - "紧急"
+        - "URGENT"
+    webhooks:
+      - "telegram"
+      - "custom"
+      
+  - name: "newsletter-block"
+    enabled: true
+    match:
+      from:
+        - "noreply@*"
+        - "*@newsletter.com"
+    webhooks: []
+      
+  - name: "catch-all"
+    enabled: true
+    match:
+      catch_all: true
+    webhooks:
+      - "telegram"
