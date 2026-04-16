@@ -1,0 +1,27 @@
+{
+  "name": "mailhooks",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "imap": "^0.8.19",
+    "mailparser": "^3.6.5",
+    "better-sqlite3": "^9.2.2",
+    "js-yaml": "^4.1.0",
+    "handlebars": "^4.7.8",
+    "pino": "^8.17.2",
+    "pino-pretty": "^10.3.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/node": "^20.10.5",
+    "@types/imap": "^0.8.40",
+    "@types/better-sqlite3": "^7.6.8",
+    "bun-types": "^1.0.18"
+  }
+}
