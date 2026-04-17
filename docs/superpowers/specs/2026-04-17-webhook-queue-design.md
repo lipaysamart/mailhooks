@@ -52,7 +52,8 @@ CREATE TABLE webhook_queue (
   last_error TEXT,                     -- 最后一次错误信息
   created_at TEXT NOT NULL,            -- 入队时间
   updated_at TEXT NOT NULL,            -- 更新时间
-  expires_at TEXT NOT NULL             -- 过期时间
+  expires_at TEXT NOT NULL,            -- 过期时间
+  UNIQUE(account_name, folder, email_id)  -- 同一邮件不重复入队
 );
 
 CREATE INDEX idx_webhook_queue_status ON webhook_queue(status);
@@ -103,8 +104,9 @@ webhook:
     {
       "text": "📧 新邮件\n发件人: {{from_name}} <{{from_addr}}>\n主题: {{subject}}\n\n{{text}}"
     }
-  expires_hours: 24                 -- 队列消息过期时间（小时）
-  cleanup_days: 7                   -- 成功/过期消息保留天数
+  poll_interval: 30                  -- 队列消费轮询间隔（秒），默认 30
+  expires_hours: 24                  -- 队列消息过期时间（小时），默认 24
+  cleanup_days: 7                    -- 成功/过期消息保留天数，默认 7
 
 # rules 配置完全删除
 ```
@@ -143,12 +145,25 @@ async syncFolder(...) {
 
 在主进程中启动定时轮询：
 
+**状态流转**：
+- `pending`: 等待处理
+- `processing`: 正在处理（消费开始时标记）
+- `success`: 发送成功
+- `expired`: 过期或不可恢复
+
+**processing 状态处理**：
+- 消费开始时标记 `processing`，防止重复消费
+- 消费失败时回退到 `pending`，下次轮询继续
+- 消费成功时标记 `success`
+- 过期时标记 `expired`
+
 ```typescript
 // index.ts 中
 async function startQueueConsumer() {
   while (true) {
-    await sleep(config.webhook.poll_interval * 1000)  // 默认 30 秒
+    await sleep((config.webhook.poll_interval ?? 30) * 1000)
     
+    // 获取 pending 状态的消息（不获取 processing）
     const items = await queue.getPending(limit: 50)
     
     for (const item of items) {
@@ -165,11 +180,12 @@ async function startQueueConsumer() {
       if (result.success) {
         await queue.markSuccess(item.id)
       } else {
-        await queue.markFailed(item.id, result.error)
-        
         // 检查是否过期
         if (new Date() > item.expiresAt) {
           await queue.markExpired(item.id, 'Expired after retries')
+        } else {
+          // 回退到 pending，下次继续尝试
+          await queue.markPending(item.id, result.error)
         }
       }
     }
@@ -196,10 +212,11 @@ async function cleanupQueue() {
 
 | 场景 | 处理 |
 |------|------|
-| Webhook 发送失败 | 增加 attempts，下次轮询继续尝试 |
-| 达到过期时间 | 标记 expired，写入日志，不再重试 |
+| Webhook 发送失败（未过期） | 回退到 pending，下次轮询继续尝试 |
+| Webhook 发送失败（已过期） | 标记 expired，写入日志，不再重试 |
 | 邮件不存在 | 标记 expired，写入日志 |
 | 队列消费异常 | 记录错误，下次轮询继续 |
+| processing 状态卡住 | 超时后自动回退到 pending（可选） |
 
 ## Testing Plan
 
@@ -223,10 +240,14 @@ async function cleanupQueue() {
 | `src/storage/migrations.ts` | 添加 webhook_queue 表 |
 | `src/storage/database.ts` | 添加队列 CRUD 方法 |
 | `src/storage/types.ts` | 添加 QueueItem 类型 |
+| `src/webhooks/queue.ts` | 新增：队列操作封装类 |
 | `src/config/types.ts` | 简化 webhook 配置，删除 rules |
 | `src/config/schema.ts` | 更新配置验证逻辑 |
 | `src/config/loader.ts` | 更新配置加载逻辑 |
 | `src/imap/syncer.ts` | 入队逻辑替代规则匹配 |
+| `src/rules/engine.ts` | 删除文件 |
+| `src/rules/matcher.ts` | 删除文件 |
+| `src/rules/types.ts` | 删除文件 |
 | `src/webhooks/sender.ts` | 简化为单 webhook 发送 |
 | `src/index.ts` | 启动队列消费者 + 清理任务 |
 | `config.example.yaml` | 更新示例配置 |
