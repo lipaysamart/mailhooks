@@ -4,59 +4,44 @@
 import type { Logger } from '../utils/logger'
 import type { WebhookConfig } from '../config/types'
 import type { Email } from '../types'
-import type { Database } from '../storage/types'
 import { compileTemplate } from '../utils/template'
 import { retry } from './retry'
 
 export class WebhookSender {
-  private db: Database
   private logger: Logger
-  private templates: Map<string, (email: Email) => string>
+  private templateFn: (email: Email) => string
   
-  constructor(db: Database, logger: Logger) {
-    this.db = db
+  constructor(config: WebhookConfig, logger: Logger) {
     this.logger = logger.child({ module: 'webhook' })
-    this.templates = new Map()
+    this.templateFn = compileTemplate(config.template)
   }
   
-  registerTemplate(name: string, template: string): void {
-    this.templates.set(name, compileTemplate(template))
-  }
-  
-  async send(webhook: WebhookConfig, email: Email): Promise<void> {
-    const templateFn = this.templates.get(webhook.name)
-    if (!templateFn) {
-      this.logger.error({ webhook: webhook.name }, 'Template not registered')
-      return
-    }
+  async send(config: WebhookConfig, email: Email): Promise<{ success: boolean; error?: string }> {
+    const body = this.templateFn(email)
     
-    const body = templateFn(email)
-    const logId = this.db.createWebhookLog(email.id, webhook.name)
+    const method = config.method ?? 'POST'
+    const headers = config.headers ?? {}
+    const timeout = config.timeout ?? 10
+    const retryCount = config.retry?.count ?? 3
+    const retryDelay = config.retry?.delay ?? 5
     
-    const method = webhook.method ?? 'POST'
-    const headers = webhook.headers ?? {}
-    const timeout = webhook.timeout ?? 10
-    const retryCount = webhook.retry?.count ?? 3
-    const retryDelay = webhook.retry?.delay ?? 5
-    
-    this.logger.info({ webhook: webhook.name, emailId: email.id }, 'Sending webhook')
+    this.logger.info({ emailId: email.id }, 'Sending webhook')
     
     const result = await retry(
-      () => this.makeRequest(webhook.url, method, headers, body, timeout),
+      () => this.makeRequest(config.url, method, headers, body, timeout),
       retryCount,
       retryDelay
     )
     
     if (result.success) {
-      this.db.updateWebhookLog(logId, 'success', result.attempts)
-      this.logger.info({ webhook: webhook.name, attempts: result.attempts }, 'Webhook sent')
+      this.logger.info({ attempts: result.attempts }, 'Webhook sent')
+      return { success: true }
     } else {
-      this.db.updateWebhookLog(logId, 'failed', result.attempts, result.lastError)
       this.logger.error({ 
-        webhook: webhook.name, 
         attempts: result.attempts,
         error: result.lastError 
       }, 'Webhook failed')
+      return { success: false, error: result.lastError }
     }
   }
   
