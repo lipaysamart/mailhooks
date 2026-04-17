@@ -34,7 +34,7 @@ export class EmailSyncer {
       host: account.host,
       port: account.port,
       tls: account.port === 993
-    }, this.logger)
+    }, this.logger, this.config.socks_proxy)
     
     try {
       await client.connect()
@@ -55,10 +55,21 @@ export class EmailSyncer {
     
     const box = await client.openBox(folder)
     const syncState = this.db.getSyncState(accountName, folder)
-    const lastUid = syncState ? parseInt(syncState.lastUid, 10) : 0
     
-    const criteria = ['UID', `${lastUid + 1}:*`]
-    const uids = await client.search(criteria)
+    if (!syncState) {
+      this.logger.info({ accountName, folder, uidnext: box.uidnext }, 'First sync, recording uidnext')
+      this.db.saveSyncState({
+        accountName,
+        folder,
+        lastUid: box.uidnext.toString(),
+        lastSyncAt: new Date().toISOString()
+      })
+      return
+    }
+    
+    const lastUid = parseInt(syncState.lastUid, 10)
+    const allUids = await client.search(['ALL'])
+    const uids = allUids.filter(uid => uid > lastUid)
     
     if (uids.length === 0) {
       this.logger.info({ accountName, folder }, 'No new emails')

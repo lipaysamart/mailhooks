@@ -2,7 +2,8 @@
 // ABOUTME: Uses mailparser to extract email content
 
 import { simpleParser } from 'mailparser'
-import type { Email, Attachment } from '../types'
+import type { AddressObject, Attachment as MailAttachment } from 'mailparser'
+import type { Attachment } from '../types'
 
 export interface ParsedEmail {
   fromAddr: string
@@ -21,9 +22,9 @@ export async function parseEmail(raw: string): Promise<ParsedEmail> {
   const fromAddr = parsed.from?.value[0]?.address ?? ''
   const fromName = parsed.from?.value[0]?.name ?? null
   
-  const toAddrs = parsed.to?.value.map(v => v.address) ?? []
+  const toAddrs = (parsed.to as AddressObject)?.value?.map(v => v.address ?? '') ?? []
   
-  const attachments: Attachment[] = parsed.attachments.map(att => ({
+  const attachments: Attachment[] = parsed.attachments.map((att: MailAttachment) => ({
     filename: att.filename ?? 'unknown',
     contentType: att.contentType,
     size: att.size
@@ -34,8 +35,8 @@ export async function parseEmail(raw: string): Promise<ParsedEmail> {
     fromName,
     toAddrs,
     subject: parsed.subject ?? null,
-    text: parsed.text ?? null,
-    html: parsed.html ?? null,
+    text: typeof parsed.text === 'string' ? parsed.text : null,
+    html: typeof parsed.html === 'string' ? parsed.html : null,
     date: parsed.date?.toISOString() ?? new Date().toISOString(),
     attachments
   }

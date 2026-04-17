@@ -7,6 +7,9 @@ log_level: info
 # Sync interval in seconds
 sync_interval: 300
 
+# SOCKS proxy (optional, leave empty to disable)
+# socks_proxy: "socks5://127.0.0.1:7898"
+
 # Email accounts to sync
 accounts:
   - name: "gmail"

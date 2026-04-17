@@ -42,6 +42,7 @@ export interface RuleConfig {
 export interface AppConfig {
   log_level?: string
   sync_interval?: number
+  socks_proxy?: string
   accounts: AccountConfig[]
   webhooks: WebhookConfig[]
   rules: RuleConfig[]

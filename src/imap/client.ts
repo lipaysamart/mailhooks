@@ -4,21 +4,29 @@
 import Imap from 'imap'
 import type { Logger } from '../utils/logger'
 import type { ImapConnectionOptions } from './types'
+import { SocksProxyAgent } from 'socks-proxy-agent'
 
 export class ImapClient {
   private imap: Imap
   private logger: Logger
   private connected: boolean = false
   
-  constructor(options: ImapConnectionOptions, logger: Logger) {
-    this.imap = new Imap({
+  constructor(options: ImapConnectionOptions, logger: Logger, socksProxy?: string) {
+    const config: Imap.Config & { agent?: unknown; connTimeout?: number } = {
       user: options.user,
       password: options.password,
       host: options.host,
       port: options.port,
       tls: options.tls,
-      tlsOptions: { rejectUnauthorized: false }
-    })
+      tlsOptions: { rejectUnauthorized: false },
+      connTimeout: 30000
+    }
+    
+    if (socksProxy) {
+      config.agent = new SocksProxyAgent(socksProxy)
+    }
+    
+    this.imap = new Imap(config as Imap.Config)
     this.logger = logger
   }
   
@@ -74,10 +82,9 @@ export class ImapClient {
     })
   }
   
-  fetch(uids: number[], bodies: string[]): Imap.Fetch {
-    const source = { uid: true }
+  fetch(uids: number[], bodies: string[]): unknown {
     const bodySource = uids.map(uid => uid.toString()).join(',')
-    const fetcher = this.imap.fetch(bodySource, { bodies, source })
+    const fetcher = this.imap.fetch(bodySource, { bodies, uid: true } as Imap.FetchOptions)
     return fetcher
   }
   

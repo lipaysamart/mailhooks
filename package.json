@@ -9,17 +9,20 @@
     "test": "bun test"
   },
   "dependencies": {
-    "imap": "^0.8.19",
-    "mailparser": "^3.6.5",
-    "js-yaml": "^4.1.0",
     "handlebars": "^4.7.8",
+    "imap": "^0.8.19",
+    "js-yaml": "^4.1.0",
+    "mailparser": "^3.6.5",
     "pino": "^8.17.2",
-    "pino-pretty": "^10.3.1"
+    "pino-pretty": "^10.3.1",
+    "socks-proxy-agent": "^10.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.3.3",
-    "@types/node": "^20.10.5",
     "@types/imap": "^0.8.40",
-    "bun-types": "^1.0.18"
+    "@types/js-yaml": "^4.0.9",
+    "@types/mailparser": "^3.4.6",
+    "@types/node": "^20.10.5",
+    "bun-types": "^1.0.18",
+    "typescript": "^5.3.3"
   }
 }
