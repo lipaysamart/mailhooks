@@ -42,7 +42,24 @@ const MIGRATIONS = [
     last_uid TEXT NOT NULL,
     last_sync_at TEXT NOT NULL,
     PRIMARY KEY(account_name, folder)
-  )`
+  )`,
+  
+  `CREATE TABLE IF NOT EXISTS webhook_queue (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email_id TEXT NOT NULL,
+    account_name TEXT NOT NULL,
+    folder TEXT NOT NULL,
+    status TEXT NOT NULL,
+    attempts INTEGER DEFAULT 0,
+    last_error TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    UNIQUE(account_name, folder, email_id)
+  )`,
+  
+  `CREATE INDEX IF NOT EXISTS idx_webhook_queue_status ON webhook_queue(status)`,
+  `CREATE INDEX IF NOT EXISTS idx_webhook_queue_expires ON webhook_queue(expires_at)`
 ]
 
 export function runMigrations(db: unknown): void {
