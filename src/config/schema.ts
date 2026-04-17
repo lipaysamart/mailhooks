@@ -1,8 +1,14 @@
 // ABOUTME: Configuration validation logic
 // ABOUTME: Validates YAML config structure and required fields
 
-import type { AppConfig, AccountConfig, WebhookConfig, RuleConfig } from './types'
-import type { MatchCondition, WebhookRetryConfig } from './types'
+import type { AppConfig, AccountConfig, WebhookConfig, WebhookRetryConfig } from './types'
+
+function validateAccounts(accounts: unknown): AccountConfig[] {
+  if (!accounts || !Array.isArray(accounts)) {
+    throw new Error('accounts: required and must be array')
+  }
+  return accounts.map((a, i) => validateAccount(a, i))
+}
 
 function validateAccount(account: unknown, index: number): AccountConfig {
   if (!account || typeof account !== 'object') {
@@ -41,91 +47,50 @@ function validateAccount(account: unknown, index: number): AccountConfig {
   }
 }
 
-function validateWebhook(webhook: unknown, index: number): WebhookConfig {
-  if (!webhook || typeof webhook !== 'object') {
-    throw new Error(`Webhook ${index} must be an object`)
-  }
-  const wh = webhook as Record<string, unknown>
-  
-  if (!wh.name || typeof wh.name !== 'string') {
-    throw new Error(`Webhook ${index}: name is required and must be string`)
-  }
-  if (!wh.url || typeof wh.url !== 'string') {
-    throw new Error(`Webhook ${index}: url is required and must be string`)
-  }
-  if (!wh.template || typeof wh.template !== 'string') {
-    throw new Error(`Webhook ${index}: template is required and must be string`)
+function validateWebhook(wh: unknown): WebhookConfig {
+  if (!wh || typeof wh !== 'object') {
+    throw new Error('webhook: required and must be object')
   }
   
-  return {
-    name: wh.name,
-    url: wh.url,
-    method: wh.method as string | undefined,
-    headers: wh.headers as Record<string, string> | undefined,
-    timeout: wh.timeout as number | undefined,
-    retry: wh.retry as WebhookRetryConfig | undefined,
-    template: wh.template
-  }
-}
-
-function validateRule(rule: unknown, index: number): RuleConfig {
-  if (!rule || typeof rule !== 'object') {
-    throw new Error(`Rule ${index} must be an object`)
-  }
-  const r = rule as Record<string, unknown>
+  const webhook = wh as Record<string, unknown>
   
-  if (!r.name || typeof r.name !== 'string') {
-    throw new Error(`Rule ${index}: name is required and must be string`)
+  if (!webhook.url || typeof webhook.url !== 'string') {
+    throw new Error('webhook.url: required and must be string')
   }
-  if (!r.match || typeof r.match !== 'object') {
-    throw new Error(`Rule ${index}: match is required and must be object`)
-  }
-  if (!r.webhooks || !Array.isArray(r.webhooks)) {
-    throw new Error(`Rule ${index}: webhooks is required and must be array`)
+  
+  if (!webhook.template || typeof webhook.template !== 'string') {
+    throw new Error('webhook.template: required and must be string')
   }
   
   return {
-    name: r.name,
-    enabled: r.enabled as boolean | undefined,
-    match: r.match as MatchCondition,
-    webhooks: r.webhooks as string[]
+    url: webhook.url,
+    method: webhook.method as string | undefined,
+    headers: webhook.headers as Record<string, string> | undefined,
+    timeout: webhook.timeout as number | undefined,
+    retry: webhook.retry as WebhookRetryConfig | undefined,
+    template: webhook.template,
+    poll_interval: webhook.poll_interval as number | undefined,
+    expires_hours: webhook.expires_hours as number | undefined,
+    cleanup_days: webhook.cleanup_days as number | undefined
   }
 }
 
-export function validateConfig(config: unknown): AppConfig {
-  if (!config || typeof config !== 'object') {
+export function validateConfig(raw: unknown): AppConfig {
+  if (!raw || typeof raw !== 'object') {
     throw new Error('Config must be an object')
   }
-  const c = config as Record<string, unknown>
   
-  if (!c.accounts || !Array.isArray(c.accounts)) {
-    throw new Error('accounts is required and must be an array')
-  }
-  if (!c.webhooks || !Array.isArray(c.webhooks)) {
-    throw new Error('webhooks is required and must be an array')
-  }
-  if (!c.rules || !Array.isArray(c.rules)) {
-    throw new Error('rules is required and must be an array')
-  }
+  const config = raw as Record<string, unknown>
   
-  const accounts = c.accounts.map((a, i) => validateAccount(a, i))
-  const webhooks = c.webhooks.map((w, i) => validateWebhook(w, i))
-  const rules = c.rules.map((r, i) => validateRule(r, i))
+  const accounts = validateAccounts(config.accounts)
   
-  const webhookNames = new Set(webhooks.map(w => w.name))
-  for (const rule of rules) {
-    for (const whName of rule.webhooks) {
-      if (!webhookNames.has(whName)) {
-        throw new Error(`Rule "${rule.name}" references unknown webhook "${whName}"`)
-      }
-    }
-  }
+  const webhook = validateWebhook(config.webhook)
   
   return {
-    log_level: c.log_level as string | undefined,
-    sync_interval: c.sync_interval as number | undefined,
+    log_level: config.log_level as string | undefined,
+    sync_interval: config.sync_interval as number | undefined,
+    socks_proxy: config.socks_proxy as string | undefined,
     accounts,
-    webhooks,
-    rules
+    webhook
   }
 }
