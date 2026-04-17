@@ -16,27 +16,15 @@ export interface WebhookRetryConfig {
 }
 
 export interface WebhookConfig {
-  name: string
   url: string
   method?: string
   headers?: Record<string, string>
   timeout?: number
   retry?: WebhookRetryConfig
   template: string
-}
-
-export interface MatchCondition {
-  from?: string[]
-  subject?: string[]
-  folders?: string[]
-  catch_all?: boolean
-}
-
-export interface RuleConfig {
-  name: string
-  enabled?: boolean
-  match: MatchCondition
-  webhooks: string[]
+  poll_interval?: number
+  expires_hours?: number
+  cleanup_days?: number
 }
 
 export interface AppConfig {
@@ -44,6 +32,5 @@ export interface AppConfig {
   sync_interval?: number
   socks_proxy?: string
   accounts: AccountConfig[]
-  webhooks: WebhookConfig[]
-  rules: RuleConfig[]
+  webhook: WebhookConfig
 }
