@@ -13,16 +13,11 @@ export class EmailSyncer {
   private logger: Logger
   private db: Database
   private config: AppConfig
-  private onEmail: ((email: Email) => void) | null = null
   
   constructor(db: Database, config: AppConfig, logger: Logger) {
     this.db = db
     this.config = config
     this.logger = logger.child({ module: 'syncer' })
-  }
-  
-  setEmailHandler(handler: (email: Email) => void): void {
-    this.onEmail = handler
   }
   
   async syncAccount(account: AccountConfig): Promise<void> {
@@ -85,9 +80,16 @@ export class EmailSyncer {
         const email = await this.processMessage(message, accountName, folder)
         this.db.saveEmail(email)
         
-        if (this.onEmail) {
-          this.onEmail(email)
-        }
+        // Enqueue for webhook
+        const expiresHours = this.config.webhook.expires_hours ?? 24
+        const expiresAt = new Date(Date.now() + expiresHours * 3600 * 1000).toISOString()
+        
+        this.db.createQueueItem({
+          emailId: email.id,
+          accountName: email.accountName,
+          folder: email.folder,
+          expiresAt
+        })
         
         this.db.saveSyncState({
           accountName,
@@ -95,6 +97,8 @@ export class EmailSyncer {
           lastUid: email.id,
           lastSyncAt: new Date().toISOString()
         })
+        
+        this.logger.info({ emailId: email.id }, 'Email enqueued for webhook')
       } catch (err) {
         this.logger.warn({ err, uid: message.uid }, 'Failed to process email')
       }
