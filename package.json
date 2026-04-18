@@ -9,7 +9,6 @@
     "test": "bun test"
   },
   "dependencies": {
-    "handlebars": "^4.7.8",
     "imap": "^0.8.19",
     "js-yaml": "^4.1.0",
     "mailparser": "^3.6.5",

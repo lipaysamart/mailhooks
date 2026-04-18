@@ -4,7 +4,7 @@
 import { Database } from 'bun:sqlite'
 import { runMigrations } from './migrations'
 import type { Email, WebhookLog, SyncState } from '../types'
-import type { Database as DatabaseInterface } from './types'
+import type { Database as DatabaseInterface, QueueItem, QueueCreateInput } from './types'
 
 export class MailHooksDatabase implements DatabaseInterface {
   private db: Database
@@ -98,6 +98,111 @@ export class MailHooksDatabase implements DatabaseInterface {
     )
     const rows = stmt.all() as Record<string, unknown>[]
     return rows.map(this.rowToWebhookLog)
+  }
+  
+  createQueueItem(input: QueueCreateInput): number {
+    const now = new Date().toISOString()
+    const stmt = this.db.prepare(`
+      INSERT OR IGNORE INTO webhook_queue (
+        email_id, account_name, folder, status, attempts, 
+        created_at, updated_at, expires_at
+      ) VALUES (?, ?, ?, 'pending', 0, ?, ?, ?)
+    `)
+    const result = stmt.run(
+      input.emailId, input.accountName, input.folder, 
+      now, now, input.expiresAt
+    )
+    return result.lastInsertRowid as number
+  }
+  
+  getPendingQueueItems(limit: number): QueueItem[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM webhook_queue 
+      WHERE status = 'pending' AND expires_at > ?
+      ORDER BY created_at ASC LIMIT ?
+    `)
+    const rows = stmt.all(new Date().toISOString(), limit) as Record<string, unknown>[]
+    return rows.map(this.rowToQueueItem.bind(this))
+  }
+  
+  markQueueProcessing(id: number): void {
+    const now = new Date().toISOString()
+    const stmt = this.db.prepare(`
+      UPDATE webhook_queue SET status = 'processing', updated_at = ? WHERE id = ?
+    `)
+    stmt.run(now, id)
+  }
+  
+  markQueueSuccess(id: number): void {
+    const now = new Date().toISOString()
+    const stmt = this.db.prepare(`
+      UPDATE webhook_queue SET status = 'success', updated_at = ? WHERE id = ?
+    `)
+    stmt.run(now, id)
+    
+    const item = this.getQueueItem(id)
+    if (item) {
+      this.db.prepare(`
+        INSERT INTO webhook_logs (email_id, webhook_name, status, attempts, created_at, updated_at)
+        VALUES (?, 'webhook', 'success', ?, ?, ?)
+      `).run(item.emailId, item.attempts, now, now)
+    }
+  }
+  
+  markQueuePending(id: number, error: string): void {
+    const now = new Date().toISOString()
+    const stmt = this.db.prepare(`
+      UPDATE webhook_queue 
+      SET status = 'pending', attempts = attempts + 1, last_error = ?, updated_at = ? 
+      WHERE id = ?
+    `)
+    stmt.run(error, now, id)
+  }
+  
+  markQueueExpired(id: number, error: string): void {
+    const now = new Date().toISOString()
+    const stmt = this.db.prepare(`
+      UPDATE webhook_queue SET status = 'expired', last_error = ?, updated_at = ? WHERE id = ?
+    `)
+    stmt.run(error, now, id)
+    
+    const item = this.getQueueItem(id)
+    if (item) {
+      this.db.prepare(`
+        INSERT INTO webhook_logs (email_id, webhook_name, status, attempts, last_error, created_at, updated_at)
+        VALUES (?, 'webhook', 'expired', ?, ?, ?, ?)
+      `).run(item.emailId, item.attempts + 1, error, now, now)
+    }
+  }
+  
+  cleanupQueue(days: number): void {
+    const cutoff = new Date(Date.now() - days * 24 * 3600 * 1000).toISOString()
+    const stmt = this.db.prepare(`
+      DELETE FROM webhook_queue 
+      WHERE status IN ('success', 'expired') AND updated_at < ?
+    `)
+    stmt.run(cutoff)
+  }
+  
+  private getQueueItem(id: number): QueueItem | null {
+    const stmt = this.db.prepare('SELECT * FROM webhook_queue WHERE id = ?')
+    const row = stmt.get(id) as Record<string, unknown> | undefined
+    return row ? this.rowToQueueItem(row) : null
+  }
+  
+  private rowToQueueItem(row: Record<string, unknown>): QueueItem {
+    return {
+      id: row.id as number,
+      emailId: row.email_id as string,
+      accountName: row.account_name as string,
+      folder: row.folder as string,
+      status: row.status as QueueItem['status'],
+      attempts: row.attempts as number,
+      lastError: row.last_error as string | null,
+      createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
+      expiresAt: row.expires_at as string
+    }
   }
   
   private rowToEmail(row: Record<string, unknown>): Email {

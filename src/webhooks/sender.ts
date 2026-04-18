@@ -1,62 +1,65 @@
-// ABOUTME: HTTP webhook sender with retry support
-// ABOUTME: Sends templated payloads to target endpoints
+// ABOUTME: HTTP webhook sender for queue-based delivery
+// ABOUTME: Sends JSON payloads to target endpoints, queue handles retries
 
 import type { Logger } from '../utils/logger'
 import type { WebhookConfig } from '../config/types'
-import type { Email } from '../types'
-import type { Database } from '../storage/types'
-import { compileTemplate } from '../utils/template'
-import { retry } from './retry'
+import type { Email, WebhookPayload } from '../types'
 
 export class WebhookSender {
-  private db: Database
   private logger: Logger
-  private templates: Map<string, (email: Email) => string>
   
-  constructor(db: Database, logger: Logger) {
-    this.db = db
+  constructor(logger: Logger) {
     this.logger = logger.child({ module: 'webhook' })
-    this.templates = new Map()
   }
   
-  registerTemplate(name: string, template: string): void {
-    this.templates.set(name, compileTemplate(template))
-  }
-  
-  async send(webhook: WebhookConfig, email: Email): Promise<void> {
-    const templateFn = this.templates.get(webhook.name)
-    if (!templateFn) {
-      this.logger.error({ webhook: webhook.name }, 'Template not registered')
-      return
+  private buildPayload(email: Email): WebhookPayload {
+    const text = email.text ?? ''
+    const truncatedText = text.length > 500 
+      ? text.substring(0, 500) + '...(内容过长已截断)' 
+      : text
+    
+    const context: WebhookPayload['context'] = {
+      text: truncatedText,
+      date: email.date
     }
     
-    const body = templateFn(email)
-    const logId = this.db.createWebhookLog(email.id, webhook.name)
+    if (email.html) {
+      context.html = email.html
+    }
     
-    const method = webhook.method ?? 'POST'
-    const headers = webhook.headers ?? {}
-    const timeout = webhook.timeout ?? 10
-    const retryCount = webhook.retry?.count ?? 3
-    const retryDelay = webhook.retry?.delay ?? 5
+    if (email.attachments.length > 0) {
+      context.attachments = email.attachments
+    }
     
-    this.logger.info({ webhook: webhook.name, emailId: email.id }, 'Sending webhook')
+    return {
+      subject: email.subject ?? '',
+      from: email.fromName ?? '',
+      context
+    }
+  }
+  
+  async send(config: WebhookConfig, email: Email): Promise<{ success: boolean; error?: string }> {
+    const payload = this.buildPayload(email)
+    const body = JSON.stringify(payload)
     
-    const result = await retry(
-      () => this.makeRequest(webhook.url, method, headers, body, timeout),
-      retryCount,
-      retryDelay
-    )
+    const method = config.method ?? 'POST'
+    const headers = {
+      'Content-Type': 'application/json',
+      ...config.headers
+    }
+    const timeout = config.timeout ?? 10
     
-    if (result.success) {
-      this.db.updateWebhookLog(logId, 'success', result.attempts)
-      this.logger.info({ webhook: webhook.name, attempts: result.attempts }, 'Webhook sent')
-    } else {
-      this.db.updateWebhookLog(logId, 'failed', result.attempts, result.lastError)
-      this.logger.error({ 
-        webhook: webhook.name, 
-        attempts: result.attempts,
-        error: result.lastError 
-      }, 'Webhook failed')
+    this.logger.debug({ payload }, 'Sending webhook payload')
+    this.logger.info({ emailId: email.id }, 'Sending webhook')
+    
+    try {
+      await this.makeRequest(config.url, method, headers, body, timeout)
+      this.logger.info('Webhook sent')
+      return { success: true }
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err)
+      this.logger.error({ error }, 'Webhook failed')
+      return { success: false, error }
     }
   }
   
