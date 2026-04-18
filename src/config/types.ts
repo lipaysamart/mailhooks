@@ -15,15 +15,15 @@ export interface WebhookConfig {
   method?: string
   headers?: Record<string, string>
   timeout?: number
-  poll_interval?: number
-  expires_hours?: number
-  cleanup_days?: number
 }
 
 export interface AppConfig {
   log_level?: string
   sync_interval?: number
   socks_proxy?: string
+  poll_interval?: number
+  expires_hours?: number
+  cleanup_days?: number
   accounts: AccountConfig[]
   webhook: WebhookConfig
 }

@@ -18,8 +18,8 @@ async function main() {
   const logger = createLogger(logLevel)
   
   const syncInterval = config.sync_interval ?? getDefaultSyncInterval()
-  const pollInterval = config.webhook.poll_interval ?? 30
-  const cleanupDays = config.webhook.cleanup_days ?? 7
+  const pollInterval = config.poll_interval ?? 30
+  const cleanupDays = config.cleanup_days ?? 7
   
   logger.info('Starting MailHooks')
   logger.info({ configPath, databasePath, syncInterval, pollInterval }, 'Configuration loaded')
@@ -56,7 +56,7 @@ async function runSyncLoop(syncer: EmailSyncer, interval: number, logger: Return
 async function runQueueConsumer(
   db: MailHooksDatabase,
   sender: WebhookSender,
-  webhookConfig: { url: string; method?: string; headers?: Record<string, string>; timeout?: number; retry?: { count: number; delay: number }; poll_interval?: number; expires_hours?: number; cleanup_days?: number },
+  webhookConfig: { url: string; method?: string; headers?: Record<string, string>; timeout?: number },
   pollInterval: number,
   logger: ReturnType<typeof createLogger>
 ) {

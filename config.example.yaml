@@ -7,6 +7,15 @@ log_level: info
 # Sync interval in seconds
 sync_interval: 300
 
+# Queue poll interval in seconds
+poll_interval: 30
+
+# Queue item expiration in hours
+expires_hours: 24
+
+# Clean up completed items after N days
+cleanup_days: 7
+
 # SOCKS proxy (optional, leave empty to disable)
 # socks_proxy: "socks5://127.0.0.1:7898"
 
@@ -28,13 +37,10 @@ accounts:
     folders:
       - "INBOX"
 
-# Webhook configuration (single webhook)
+# Webhook configuration
 webhook:
   url: "https://your-webhook-url.com/endpoint"
   method: "POST"
   headers:
     Content-Type: "application/json"
   timeout: 10
-  poll_interval: 30        # Queue poll interval in seconds
-  expires_hours: 24        # Queue item expiration in hours
-  cleanup_days: 7          # Clean up completed items after N days

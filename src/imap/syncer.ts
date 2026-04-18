@@ -81,7 +81,7 @@ export class EmailSyncer {
         this.db.saveEmail(email)
         
         // Enqueue for webhook
-        const expiresHours = this.config.webhook.expires_hours ?? 24
+        const expiresHours = this.config.expires_hours ?? 24
         const expiresAt = new Date(Date.now() + expiresHours * 3600 * 1000).toISOString()
         
         this.db.createQueueItem({

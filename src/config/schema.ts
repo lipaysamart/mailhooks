@@ -62,10 +62,7 @@ function validateWebhook(wh: unknown): WebhookConfig {
     url: webhook.url,
     method: webhook.method as string | undefined,
     headers: webhook.headers as Record<string, string> | undefined,
-    timeout: webhook.timeout as number | undefined,
-    poll_interval: webhook.poll_interval as number | undefined,
-    expires_hours: webhook.expires_hours as number | undefined,
-    cleanup_days: webhook.cleanup_days as number | undefined
+    timeout: webhook.timeout as number | undefined
   }
 }
 
@@ -84,6 +81,9 @@ export function validateConfig(raw: unknown): AppConfig {
     log_level: config.log_level as string | undefined,
     sync_interval: config.sync_interval as number | undefined,
     socks_proxy: config.socks_proxy as string | undefined,
+    poll_interval: config.poll_interval as number | undefined,
+    expires_hours: config.expires_hours as number | undefined,
+    cleanup_days: config.cleanup_days as number | undefined,
     accounts,
     webhook
   }
