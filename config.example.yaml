@@ -38,10 +38,6 @@ webhook:
   retry:
     count: 3
     delay: 5
-  template: |
-    {
-      "text": "📧 New Email\nFrom: {{from_name}} <{{from_addr}}>\nSubject: {{subject}}\n\n{{text}}"
-    }
   poll_interval: 30        # Queue poll interval in seconds
   expires_hours: 24        # Queue item expiration in hours
   cleanup_days: 7          # Clean up completed items after N days
