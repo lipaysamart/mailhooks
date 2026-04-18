@@ -21,7 +21,6 @@ export interface WebhookConfig {
   headers?: Record<string, string>
   timeout?: number
   retry?: WebhookRetryConfig
-  template: string
   poll_interval?: number
   expires_hours?: number
   cleanup_days?: number
