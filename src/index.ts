@@ -28,7 +28,7 @@ async function main() {
   db.init()
   
   const syncer = new EmailSyncer(db, config, logger)
-  const webhookSender = new WebhookSender(config.webhook, logger)
+  const webhookSender = new WebhookSender(logger)
   
   // Start queue consumer
   logger.info({ interval: pollInterval }, 'Starting webhook queue consumer')
@@ -56,7 +56,7 @@ async function runSyncLoop(syncer: EmailSyncer, interval: number, logger: Return
 async function runQueueConsumer(
   db: MailHooksDatabase,
   sender: WebhookSender,
-  webhookConfig: { url: string; method?: string; headers?: Record<string, string>; timeout?: number; retry?: { count: number; delay: number }; template: string; poll_interval?: number; expires_hours?: number; cleanup_days?: number },
+  webhookConfig: { url: string; method?: string; headers?: Record<string, string>; timeout?: number; retry?: { count: number; delay: number }; poll_interval?: number; expires_hours?: number; cleanup_days?: number },
   pollInterval: number,
   logger: ReturnType<typeof createLogger>
 ) {
