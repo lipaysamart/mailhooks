@@ -1,26 +1,43 @@
 // ABOUTME: HTTP webhook sender with retry support
-// ABOUTME: Sends templated payloads to target endpoints
+// ABOUTME: Sends JSON payloads to target endpoints
 
 import type { Logger } from '../utils/logger'
 import type { WebhookConfig } from '../config/types'
-import type { Email } from '../types'
-import { compileTemplate } from '../utils/template'
+import type { Email, WebhookPayload } from '../types'
 import { retry } from './retry'
 
 export class WebhookSender {
   private logger: Logger
-  private templateFn: (email: Email) => string
   
-  constructor(config: WebhookConfig, logger: Logger) {
+  constructor(logger: Logger) {
     this.logger = logger.child({ module: 'webhook' })
-    this.templateFn = compileTemplate(config.template)
+  }
+  
+  private buildPayload(email: Email): WebhookPayload {
+    const text = email.text ?? ''
+    const truncatedText = text.length > 500 
+      ? text.substring(0, 500) + '...(内容过长已截断)' 
+      : text
+    
+    return {
+      subject: email.subject ?? '',
+      from_name: email.fromName ?? '',
+      context: {
+        text: truncatedText,
+        date: email.date
+      }
+    }
   }
   
   async send(config: WebhookConfig, email: Email): Promise<{ success: boolean; error?: string }> {
-    const body = this.templateFn(email)
+    const payload = this.buildPayload(email)
+    const body = JSON.stringify(payload)
     
     const method = config.method ?? 'POST'
-    const headers = config.headers ?? {}
+    const headers = {
+      'Content-Type': 'application/json',
+      ...config.headers
+    }
     const timeout = config.timeout ?? 10
     const retryCount = config.retry?.count ?? 3
     const retryDelay = config.retry?.delay ?? 5
