@@ -6,3 +6,4 @@ data/
 config.yaml
 .env
 bun.lock
+docs/
