@@ -23,6 +23,8 @@ export interface WebhookPayload {
   context: {
     text: string
     date: string
+    html?: string
+    attachments?: Attachment[]
   }
 }
 
