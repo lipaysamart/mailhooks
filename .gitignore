@@ -5,4 +5,4 @@ data/
 *.log
 config.yaml
 .env
-bun.lockb
+bun.lock
