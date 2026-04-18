@@ -42,6 +42,7 @@ export class WebhookSender {
     const retryCount = config.retry?.count ?? 3
     const retryDelay = config.retry?.delay ?? 5
     
+    this.logger.debug({ payload }, 'Sending webhook payload')
     this.logger.info({ emailId: email.id }, 'Sending webhook')
     
     const result = await retry(
