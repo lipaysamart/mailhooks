@@ -10,17 +10,11 @@ export interface AccountConfig {
   folders?: string[]
 }
 
-export interface WebhookRetryConfig {
-  count: number
-  delay: number
-}
-
 export interface WebhookConfig {
   url: string
   method?: string
   headers?: Record<string, string>
   timeout?: number
-  retry?: WebhookRetryConfig
   poll_interval?: number
   expires_hours?: number
   cleanup_days?: number

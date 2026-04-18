@@ -1,10 +1,9 @@
-// ABOUTME: HTTP webhook sender with retry support
-// ABOUTME: Sends JSON payloads to target endpoints
+// ABOUTME: HTTP webhook sender for queue-based delivery
+// ABOUTME: Sends JSON payloads to target endpoints, queue handles retries
 
 import type { Logger } from '../utils/logger'
 import type { WebhookConfig } from '../config/types'
 import type { Email, WebhookPayload } from '../types'
-import { retry } from './retry'
 
 export class WebhookSender {
   private logger: Logger
@@ -39,27 +38,18 @@ export class WebhookSender {
       ...config.headers
     }
     const timeout = config.timeout ?? 10
-    const retryCount = config.retry?.count ?? 3
-    const retryDelay = config.retry?.delay ?? 5
     
     this.logger.debug({ payload }, 'Sending webhook payload')
     this.logger.info({ emailId: email.id }, 'Sending webhook')
     
-    const result = await retry(
-      () => this.makeRequest(config.url, method, headers, body, timeout),
-      retryCount,
-      retryDelay
-    )
-    
-    if (result.success) {
-      this.logger.info({ attempts: result.attempts }, 'Webhook sent')
+    try {
+      await this.makeRequest(config.url, method, headers, body, timeout)
+      this.logger.info('Webhook sent')
       return { success: true }
-    } else {
-      this.logger.error({ 
-        attempts: result.attempts,
-        error: result.lastError 
-      }, 'Webhook failed')
-      return { success: false, error: result.lastError }
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err)
+      this.logger.error({ error }, 'Webhook failed')
+      return { success: false, error }
     }
   }
   

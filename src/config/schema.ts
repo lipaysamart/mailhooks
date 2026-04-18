@@ -1,7 +1,7 @@
 // ABOUTME: Configuration validation logic
 // ABOUTME: Validates YAML config structure and required fields
 
-import type { AppConfig, AccountConfig, WebhookConfig, WebhookRetryConfig } from './types'
+import type { AppConfig, AccountConfig, WebhookConfig } from './types'
 
 function validateAccounts(accounts: unknown): AccountConfig[] {
   if (!accounts || !Array.isArray(accounts)) {
@@ -63,7 +63,6 @@ function validateWebhook(wh: unknown): WebhookConfig {
     method: webhook.method as string | undefined,
     headers: webhook.headers as Record<string, string> | undefined,
     timeout: webhook.timeout as number | undefined,
-    retry: webhook.retry as WebhookRetryConfig | undefined,
     poll_interval: webhook.poll_interval as number | undefined,
     expires_hours: webhook.expires_hours as number | undefined,
     cleanup_days: webhook.cleanup_days as number | undefined

@@ -35,9 +35,6 @@ webhook:
   headers:
     Content-Type: "application/json"
   timeout: 10
-  retry:
-    count: 3
-    delay: 5
   poll_interval: 30        # Queue poll interval in seconds
   expires_hours: 24        # Queue item expiration in hours
   cleanup_days: 7          # Clean up completed items after N days
