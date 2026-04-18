@@ -58,17 +58,12 @@ function validateWebhook(wh: unknown): WebhookConfig {
     throw new Error('webhook.url: required and must be string')
   }
   
-  if (!webhook.template || typeof webhook.template !== 'string') {
-    throw new Error('webhook.template: required and must be string')
-  }
-  
   return {
     url: webhook.url,
     method: webhook.method as string | undefined,
     headers: webhook.headers as Record<string, string> | undefined,
     timeout: webhook.timeout as number | undefined,
     retry: webhook.retry as WebhookRetryConfig | undefined,
-    template: webhook.template,
     poll_interval: webhook.poll_interval as number | undefined,
     expires_hours: webhook.expires_hours as number | undefined,
     cleanup_days: webhook.cleanup_days as number | undefined
