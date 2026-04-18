@@ -20,7 +20,7 @@ export class WebhookSender {
     
     return {
       subject: email.subject ?? '',
-      from_name: email.fromName ?? '',
+      from: email.fromName ?? '',
       context: {
         text: truncatedText,
         date: email.date

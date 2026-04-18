@@ -19,7 +19,7 @@ export interface Email {
 
 export interface WebhookPayload {
   subject: string
-  from_name: string
+  from: string
   context: {
     text: string
     date: string
