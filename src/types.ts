@@ -17,6 +17,15 @@ export interface Email {
   syncedAt: string
 }
 
+export interface WebhookPayload {
+  subject: string
+  from_name: string
+  context: {
+    text: string
+    date: string
+  }
+}
+
 export interface Attachment {
   filename: string
   contentType: string
