@@ -23,3 +23,7 @@ export function getDefaultSyncInterval(): number {
 export function getDefaultLogLevel(): string {
   return 'info'
 }
+
+export function getDefaultLogFormat(): string {
+  return 'pretty'
+}

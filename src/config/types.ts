@@ -19,6 +19,7 @@ export interface WebhookConfig {
 
 export interface AppConfig {
   log_level?: string
+  log_format?: string
   sync_interval?: number
   socks_proxy?: string
   poll_interval?: number
