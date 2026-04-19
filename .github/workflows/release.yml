@@ -146,9 +146,10 @@ jobs:
             echo "CHANGES=Initial release" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create Release
+      - name: Create Draft Release
         uses: softprops/action-gh-release@v2
         with:
+          draft: true
           name: MailHooks ${{ steps.version.outputs.VERSION }}
           body: |
             ## Changes
@@ -156,7 +157,9 @@ jobs:
 
             ## Docker Images
             - `lipaysam/mailhooks:${{ steps.version.outputs.VERSION }}`
+            - `lipaysam/mailhooks:latest`
             - `registry.cn-shenzhen.aliyuncs.com/lipaysam/mailhooks:${{ steps.version.outputs.VERSION }}`
+            - `registry.cn-shenzhen.aliyuncs.com/lipaysam/mailhooks:latest`
 
             ## Usage
             ```bash
