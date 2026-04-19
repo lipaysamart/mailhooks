@@ -79,6 +79,7 @@ export function validateConfig(raw: unknown): AppConfig {
   
   return {
     log_level: config.log_level as string | undefined,
+    log_format: config.log_format as string | undefined,
     sync_interval: config.sync_interval as number | undefined,
     socks_proxy: config.socks_proxy as string | undefined,
     poll_interval: config.poll_interval as number | undefined,
