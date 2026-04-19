@@ -13,28 +13,26 @@ export class WebhookSender {
   }
   
   private buildPayload(email: Email): WebhookPayload {
-    const text = email.text ?? ''
-    const truncatedText = text.length > 500 
-      ? text.substring(0, 500) + '...(内容过长已截断)' 
-      : text
-    
-    const context: WebhookPayload['context'] = {
-      text: truncatedText,
-      date: email.date
-    }
-    
-    if (email.html) {
-      context.html = email.html
-    }
-    
-    if (email.attachments.length > 0) {
-      context.attachments = email.attachments
-    }
-    
     return {
-      subject: email.subject ?? '',
-      from: email.fromName ?? '',
-      context
+      meta: {
+        id: email.id,
+        accountName: email.accountName,
+        folder: email.folder,
+        date: email.date,
+        syncedAt: email.syncedAt,
+        flags: email.flags
+      },
+      from: {
+        name: email.fromName,
+        address: email.fromAddr
+      },
+      to: email.toAddrs,
+      subject: email.subject,
+      content: {
+        text: email.text,
+        html: email.html
+      },
+      attachments: email.attachments
     }
   }
   
