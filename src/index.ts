@@ -2,8 +2,8 @@
 // ABOUTME: Coordinates config, storage, syncer, and webhook queue consumer
 
 import { getEnv } from './utils/env'
-import { createLogger, type LogLevel } from './utils/logger'
-import { loadConfig, getDefaultSyncInterval, getDefaultLogLevel } from './config/loader'
+import { createLogger, type LogLevel, type LogFormat } from './utils/logger'
+import { loadConfig, getDefaultSyncInterval, getDefaultLogLevel, getDefaultLogFormat } from './config/loader'
 import { MailHooksDatabase } from './storage/database'
 import { EmailSyncer } from './imap/syncer'
 import { WebhookSender } from './webhooks/sender'

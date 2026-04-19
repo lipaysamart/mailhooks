@@ -4,6 +4,9 @@
 # Log level: debug/info/warn/error
 log_level: info
 
+# Log format: pretty/json
+log_format: pretty
+
 # Sync interval in seconds
 sync_interval: 300
 

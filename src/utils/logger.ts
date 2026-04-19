@@ -4,10 +4,17 @@
 import pino from 'pino'
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
+export type LogFormat = 'pretty' | 'json'
 
-export function createLogger(level: LogLevel = 'info') {
+export function createLogger(level: LogLevel = 'info', format: LogFormat = 'pretty') {
+  const baseConfig = { level }
+  
+  if (format === 'json') {
+    return pino(baseConfig)
+  }
+  
   return pino({
-    level,
+    ...baseConfig,
     transport: {
       target: 'pino-pretty',
       options: {
