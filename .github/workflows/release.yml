@@ -137,7 +137,11 @@ jobs:
 
       - name: Get version
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          DOCKER_VERSION=${VERSION#v}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "DOCKER_VERSION=$DOCKER_VERSION" >> $GITHUB_OUTPUT
 
       - name: Generate changelog
         id: changelog
@@ -162,9 +166,9 @@ jobs:
             ${{ steps.changelog.outputs.CHANGES }}
 
             ## Docker Images
-            - `lipaysam/mailhooks:${{ steps.version.outputs.VERSION }}`
+            - `lipaysam/mailhooks:${{ steps.version.outputs.DOCKER_VERSION }}`
             - `lipaysam/mailhooks:latest`
-            - `registry.cn-shenzhen.aliyuncs.com/lipaysam/mailhooks:${{ steps.version.outputs.VERSION }}`
+            - `registry.cn-shenzhen.aliyuncs.com/lipaysam/mailhooks:${{ steps.version.outputs.DOCKER_VERSION }}`
             - `registry.cn-shenzhen.aliyuncs.com/lipaysam/mailhooks:latest`
 
             ## Usage
@@ -172,7 +176,7 @@ jobs:
             docker run -d \
               -v ./config.yaml:/app/config.yaml \
               -v ./data:/app/data \
-              lipaysam/mailhooks:${{ steps.version.outputs.VERSION }}
+              lipaysam/mailhooks:${{ steps.version.outputs.DOCKER_VERSION }}
             ```
           files: dist/*
           generate_release_notes: false
