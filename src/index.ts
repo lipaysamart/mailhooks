@@ -15,7 +15,8 @@ async function main() {
   const config = await loadConfig(configPath)
   
   const logLevel = (config.log_level ?? getDefaultLogLevel()) as LogLevel
-  const logger = createLogger(logLevel)
+  const logFormat = (config.log_format ?? getDefaultLogFormat()) as LogFormat
+  const logger = createLogger(logLevel, logFormat)
   
   const syncInterval = config.sync_interval ?? getDefaultSyncInterval()
   const pollInterval = config.poll_interval ?? 30
