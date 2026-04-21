@@ -5,25 +5,34 @@ import type { Logger } from '../utils/logger'
 import type { Database } from '../storage/types'
 import type { AppConfig, AccountConfig } from '../config/types'
 import type { Email } from '../types'
+import type { ImapConnectionOptions, ImapClientInterface } from './types'
 import { ImapClient } from './client'
 import { parseEmail } from './parser'
 import { getDefaultFolders } from '../config/loader'
+
+export type ImapClientFactory = (options: ImapConnectionOptions, logger: Logger, proxy?: string) => ImapClientInterface
+
+const defaultClientFactory: ImapClientFactory = (options, logger, proxy) => {
+  return new ImapClient(options, logger, proxy)
+}
 
 export class EmailSyncer {
   private logger: Logger
   private db: Database
   private config: AppConfig
+  private clientFactory: ImapClientFactory
   
-  constructor(db: Database, config: AppConfig, logger: Logger) {
+  constructor(db: Database, config: AppConfig, logger: Logger, clientFactory?: ImapClientFactory) {
     this.db = db
     this.config = config
     this.logger = logger.child({ module: 'syncer' })
+    this.clientFactory = clientFactory ?? defaultClientFactory
   }
   
   async syncAccount(account: AccountConfig): Promise<void> {
     this.logger.info({ account: account.name }, 'Starting sync for account')
     
-    const client = new ImapClient({
+    const client = this.clientFactory({
       user: account.username,
       password: account.password,
       host: account.host,
@@ -45,7 +54,7 @@ export class EmailSyncer {
     }
   }
   
-  private async syncFolder(client: ImapClient, accountName: string, folder: string): Promise<void> {
+  private async syncFolder(client: ImapClientInterface, accountName: string, folder: string): Promise<void> {
     this.logger.info({ accountName, folder }, 'Syncing folder')
     
     const box = await client.openBox(folder)
@@ -64,7 +73,7 @@ export class EmailSyncer {
     
     const lastUid = parseInt(syncState.lastUid, 10)
     const allUids = await client.search(['ALL'])
-    const uids = allUids.filter(uid => uid > lastUid)
+    const uids = allUids.filter(uid => uid >= lastUid)
     
     if (uids.length === 0) {
       this.logger.info({ accountName, folder }, 'No new emails')

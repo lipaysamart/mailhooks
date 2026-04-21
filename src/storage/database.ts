@@ -48,6 +48,12 @@ export class MailHooksDatabase implements DatabaseInterface {
     return this.rowToEmail(row)
   }
   
+  getEmailsByAccount(accountName: string): Email[] {
+    const stmt = this.db.prepare('SELECT * FROM emails WHERE account_name = ? ORDER BY date DESC')
+    const rows = stmt.all(accountName) as Record<string, unknown>[]
+    return rows.map(this.rowToEmail)
+  }
+  
   getSyncState(accountName: string, folder: string): SyncState | null {
     const stmt = this.db.prepare(
       'SELECT * FROM sync_state WHERE account_name = ? AND folder = ?'
