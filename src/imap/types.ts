@@ -16,7 +16,7 @@ export interface ImapClientInterface {
   disconnect(): void
   openBox(folder: string): Promise<{ uidnext: number }>
   search(criteria: unknown[]): Promise<number[]>
-  fetch(uids: number[], options: { bodies: string[] }): Promise<ImapMessage[]>
+  fetch(uids: number[], bodies: string[]): unknown
 }
 
 export interface ImapMessage {

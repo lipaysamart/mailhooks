@@ -5,12 +5,12 @@ import type { Logger } from '../utils/logger'
 import type { Database } from '../storage/types'
 import type { AppConfig, AccountConfig } from '../config/types'
 import type { Email } from '../types'
-import type { ImapConnectionOptions } from './types'
+import type { ImapConnectionOptions, ImapClientInterface } from './types'
 import { ImapClient } from './client'
 import { parseEmail } from './parser'
 import { getDefaultFolders } from '../config/loader'
 
-export type ImapClientFactory = (options: ImapConnectionOptions, logger: Logger, proxy?: string) => ImapClient
+export type ImapClientFactory = (options: ImapConnectionOptions, logger: Logger, proxy?: string) => ImapClientInterface
 
 const defaultClientFactory: ImapClientFactory = (options, logger, proxy) => {
   return new ImapClient(options, logger, proxy)
@@ -54,7 +54,7 @@ export class EmailSyncer {
     }
   }
   
-  private async syncFolder(client: ImapClient, accountName: string, folder: string): Promise<void> {
+  private async syncFolder(client: ImapClientInterface, accountName: string, folder: string): Promise<void> {
     this.logger.info({ accountName, folder }, 'Syncing folder')
     
     const box = await client.openBox(folder)

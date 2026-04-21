@@ -6,13 +6,13 @@ import { EmailSyncer, type ImapClientFactory } from './syncer'
 import { MailHooksDatabase } from '../storage/database'
 import { createLogger } from '../utils/logger'
 import type { AppConfig } from '../config/types'
-import type { ImapClient } from './client'
+import type { ImapClientInterface } from './types'
 
 function createMockClient(
   openBoxResult: { uidnext: number },
   searchResult: number[],
   fetchResult?: Array<{ uid: number; raw: string }>
-): ImapClient {
+): ImapClientInterface {
   let fetchMessages = fetchResult ?? []
   
   return {
@@ -20,9 +20,8 @@ function createMockClient(
     disconnect: () => {},
     openBox: async (folder: string) => openBoxResult,
     search: async (criteria: unknown[]) => searchResult,
-    fetch: (uids: number[], options: { bodies: string[] }) => {
+    fetch: (uids: number[], bodies: string[]) => {
       const messages = fetchMessages.filter(m => uids.includes(m.uid))
-      let messageIndex = 0
       
       return {
         on: (event: string, cb: Function) => {
@@ -49,7 +48,7 @@ function createMockClient(
         }
       }
     }
-  } as ImapClient
+  }
 }
 
 describe('EmailSyncer', () => {
