@@ -18,25 +18,21 @@ export interface Email {
 }
 
 export interface WebhookPayload {
-  meta: {
-    id: string
-    accountName: string
-    folder: string
-    date: string
-    syncedAt: string
-    flags: string[]
-  }
+  id: string
+  accountName: string
+  folder: string
   from: {
     name: string | null
     address: string
   }
   to: string[]
   subject: string | null
-  content: {
-    text: string | null
-    html: string | null
-  }
+  text: string | null
+  body: string
   attachments: Attachment[]
+  date: string
+  syncedAt: string
+  flags: string[]
 }
 
 export interface Attachment {

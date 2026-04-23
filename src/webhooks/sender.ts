@@ -4,6 +4,7 @@
 import type { Logger } from '../utils/logger'
 import type { WebhookConfig } from '../config/types'
 import type { Email, WebhookPayload } from '../types'
+import { getEmailBody } from '../utils/markdown'
 
 export class WebhookSender {
   private logger: Logger
@@ -14,25 +15,21 @@ export class WebhookSender {
   
   private buildPayload(email: Email): WebhookPayload {
     return {
-      meta: {
-        id: email.id,
-        accountName: email.accountName,
-        folder: email.folder,
-        date: email.date,
-        syncedAt: email.syncedAt,
-        flags: email.flags
-      },
+      id: email.id,
+      accountName: email.accountName,
+      folder: email.folder,
       from: {
         name: email.fromName,
         address: email.fromAddr
       },
       to: email.toAddrs,
       subject: email.subject,
-      content: {
-        text: email.text,
-        html: email.html
-      },
-      attachments: email.attachments
+      text: email.text,
+      body: getEmailBody(email.html),
+      attachments: email.attachments,
+      date: email.date,
+      syncedAt: email.syncedAt,
+      flags: email.flags
     }
   }
   

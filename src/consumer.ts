@@ -38,11 +38,10 @@ async function runQueueConsumer(
   logger: ReturnType<typeof createLogger>
 ) {
   while (true) {
-    await sleep(pollInterval * 1000)
-    
     const items = db.claimQueueItems(50)
     
     if (items.length === 0) {
+      await sleep(pollInterval * 1000)
       continue
     }
     
@@ -75,6 +74,8 @@ async function runQueueConsumer(
         logger.error({ err, itemId: item.id }, '[CONSUMER] Queue processing error')
       }
     }
+    
+    await sleep(pollInterval * 1000)
   }
 }
 
