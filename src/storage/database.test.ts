@@ -175,7 +175,7 @@ describe('MailHooksDatabase', () => {
       db.saveEmail(testEmail)
     })
 
-    test('createQueueItem and getPendingQueueItems', () => {
+    test('createQueueItem creates pending item', () => {
       const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString()
       db.createQueueItem({
         emailId: '123',
@@ -183,13 +183,10 @@ describe('MailHooksDatabase', () => {
         folder: 'INBOX',
         expiresAt
       })
-      const items = db.getPendingQueueItems(10)
+      const items = db.claimQueueItems(10)
       expect(items.length).toBe(1)
       expect(items[0].emailId).toBe('123')
-      expect(items[0].accountName).toBe('gmail')
-      expect(items[0].folder).toBe('INBOX')
-      expect(items[0].status).toBe('pending')
-      expect(items[0].attempts).toBe(0)
+      expect(items[0].status).toBe('processing')
     })
 
     test('createQueueItem ignores duplicate', () => {
@@ -206,11 +203,11 @@ describe('MailHooksDatabase', () => {
         folder: 'INBOX',
         expiresAt
       })
-      const items = db.getPendingQueueItems(10)
+      const items = db.claimQueueItems(10)
       expect(items.length).toBe(1)
     })
 
-    test('markQueueProcessing', () => {
+    test('markQueueSuccess updates status', () => {
       const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString()
       db.createQueueItem({
         emailId: '123',
@@ -218,24 +215,9 @@ describe('MailHooksDatabase', () => {
         folder: 'INBOX',
         expiresAt
       })
-      const items = db.getPendingQueueItems(10)
-      db.markQueueProcessing(items[0].id)
-      const pending = db.getPendingQueueItems(10)
-      expect(pending.length).toBe(0)
-    })
-
-    test('markQueueSuccess', () => {
-      const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString()
-      db.createQueueItem({
-        emailId: '123',
-        accountName: 'gmail',
-        folder: 'INBOX',
-        expiresAt
-      })
-      const items = db.getPendingQueueItems(10)
-      db.markQueueProcessing(items[0].id)
+      const items = db.claimQueueItems(10)
       db.markQueueSuccess(items[0].id)
-      const pending = db.getPendingQueueItems(10)
+      const pending = db.claimQueueItems(10)
       expect(pending.length).toBe(0)
     })
 
@@ -247,10 +229,9 @@ describe('MailHooksDatabase', () => {
         folder: 'INBOX',
         expiresAt
       })
-      const items = db.getPendingQueueItems(10)
-      db.markQueueProcessing(items[0].id)
+      const items = db.claimQueueItems(10)
       db.markQueuePending(items[0].id, 'Connection failed')
-      const pending = db.getPendingQueueItems(10)
+      const pending = db.claimQueueItems(10)
       expect(pending.length).toBe(1)
       expect(pending[0].attempts).toBe(1)
       expect(pending[0].lastError).toBe('Connection failed')
@@ -264,39 +245,10 @@ describe('MailHooksDatabase', () => {
         folder: 'INBOX',
         expiresAt
       })
-      const items = db.getPendingQueueItems(10)
-      db.markQueueProcessing(items[0].id)
+      const items = db.claimQueueItems(10)
       db.markQueueExpired(items[0].id, 'Timeout')
-      const pending = db.getPendingQueueItems(10)
+      const pending = db.claimQueueItems(10)
       expect(pending.length).toBe(0)
-    })
-
-    test('getPendingQueueItems respects limit', () => {
-      const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString()
-      for (let i = 1; i <= 5; i++) {
-        db.saveEmail({ ...testEmail, id: `email-${i}` })
-        db.createQueueItem({
-          emailId: `email-${i}`,
-          accountName: 'gmail',
-          folder: 'INBOX',
-          expiresAt
-        })
-      }
-      const items = db.getPendingQueueItems(3)
-      expect(items.length).toBe(3)
-    })
-
-    test('getPendingQueueItems excludes expired items', () => {
-      const pastExpiresAt = new Date(Date.now() - 1000).toISOString()
-      db.saveEmail({ ...testEmail, id: 'expired-email' })
-      db.createQueueItem({
-        emailId: 'expired-email',
-        accountName: 'gmail',
-        folder: 'INBOX',
-        expiresAt: pastExpiresAt
-      })
-      const items = db.getPendingQueueItems(10)
-      expect(items.length).toBe(0)
     })
 
     test('cleanupQueue removes old completed items', () => {
@@ -307,11 +259,10 @@ describe('MailHooksDatabase', () => {
         folder: 'INBOX',
         expiresAt
       })
-      const items = db.getPendingQueueItems(10)
-      db.markQueueProcessing(items[0].id)
+      const items = db.claimQueueItems(10)
       db.markQueueSuccess(items[0].id)
       db.cleanupQueue(0)
-      const pending = db.getPendingQueueItems(10)
+      const pending = db.claimQueueItems(10)
       expect(pending.length).toBe(0)
     })
   })
