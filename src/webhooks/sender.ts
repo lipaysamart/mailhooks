@@ -3,6 +3,7 @@
 
 import type { Logger } from '../utils/logger'
 import type { WebhookConfig } from '../config/types'
+import type { Email, WebhookPayload } from '../types'
 import { getEmailBody } from '../utils/markdown'
 
 export class WebhookSender {
