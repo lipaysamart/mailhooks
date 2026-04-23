@@ -5,10 +5,11 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import { MailHooksDatabase } from './database'
 import { runMigrations } from './migrations'
 import { Database } from 'bun:sqlite'
-import { unlinkSync, existsSync, mkdirSync, rmdirSync } from 'fs'
+import { unlinkSync, existsSync, mkdirSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import type { Email, SyncState, QueueItem } from '../types'
+import type { Email, SyncState } from '../types'
+import type { QueueItem } from './types'
 
 function getTestDbPath(name: string): string {
   const testDir = join(tmpdir(), 'mailhooks-test')
