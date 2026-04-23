@@ -8,6 +8,7 @@ import type { Database as DatabaseInterface, QueueItem, QueueCreateInput } from 
 
 export class MailHooksDatabase implements DatabaseInterface {
   private db: Database
+  private enqueueFn: ((email: Email, queueInput: QueueCreateInput, syncState: SyncState) => void) | null = null
   
   constructor(path: string) {
     this.db = new Database(path)
@@ -15,6 +16,51 @@ export class MailHooksDatabase implements DatabaseInterface {
   
   init(): void {
     runMigrations(this.db)
+    
+    const saveEmailStmt = this.db.prepare(`
+      INSERT OR REPLACE INTO emails (
+        id, account_name, folder, from_addr, from_name, to_addrs,
+        subject, text, html, date, flags, attachments, synced_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    
+    const createQueueStmt = this.db.prepare(`
+      INSERT OR IGNORE INTO webhook_queue (
+        email_id, account_name, folder, status, attempts, 
+        created_at, updated_at, expires_at
+      ) VALUES (?, ?, ?, 'pending', 0, ?, ?, ?)
+    `)
+    
+    const saveSyncStmt = this.db.prepare(`
+      INSERT OR REPLACE INTO sync_state (
+        account_name, folder, last_uid, last_sync_at
+      ) VALUES (?, ?, ?, ?)
+    `)
+    
+    this.enqueueFn = this.db.transaction((email: Email, queueInput: QueueCreateInput, syncState: SyncState) => {
+      saveEmailStmt.run(
+        email.id, email.accountName, email.folder, email.fromAddr, email.fromName,
+        JSON.stringify(email.toAddrs), email.subject, email.text, email.html,
+        email.date, JSON.stringify(email.flags), JSON.stringify(email.attachments), email.syncedAt
+      )
+      
+      const now = new Date().toISOString()
+      createQueueStmt.run(
+        queueInput.emailId, queueInput.accountName, queueInput.folder,
+        now, now, queueInput.expiresAt
+      )
+      
+      saveSyncStmt.run(
+        syncState.accountName, syncState.folder, syncState.lastUid, syncState.lastSyncAt
+      )
+    })
+  }
+  
+  enqueueEmail(email: Email, queueInput: QueueCreateInput, syncState: SyncState): void {
+    if (!this.enqueueFn) {
+      throw new Error('Database not initialized')
+    }
+    this.enqueueFn(email, queueInput, syncState)
   }
   
   saveEmail(email: Email): void {
@@ -119,6 +165,32 @@ export class MailHooksDatabase implements DatabaseInterface {
       now, now, input.expiresAt
     )
     return result.lastInsertRowid as number
+  }
+  
+  claimQueueItems(limit: number): QueueItem[] {
+    const now = new Date().toISOString()
+    
+    const updateStmt = this.db.prepare(`
+      UPDATE webhook_queue 
+      SET status = 'processing', updated_at = ?
+      WHERE id IN (
+        SELECT id FROM webhook_queue 
+        WHERE status = 'pending' AND expires_at > ?
+        ORDER BY created_at ASC 
+        LIMIT ?
+      )
+    `)
+    
+    updateStmt.run(now, now, limit)
+    
+    const selectStmt = this.db.prepare(`
+      SELECT * FROM webhook_queue 
+      WHERE status = 'processing' AND updated_at = ?
+      ORDER BY created_at ASC
+    `)
+    
+    const rows = selectStmt.all(now) as Record<string, unknown>[]
+    return rows.map(this.rowToQueueItem.bind(this))
   }
   
   getPendingQueueItems(limit: number): QueueItem[] {

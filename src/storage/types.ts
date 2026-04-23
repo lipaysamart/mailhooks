@@ -13,6 +13,8 @@ export interface Database {
   updateWebhookLog(id: number, status: string, attempts: number, error?: string): void
   getPendingWebhookLogs(): WebhookLog[]
   createQueueItem(input: QueueCreateInput): number
+  enqueueEmail(email: Email, queueInput: QueueCreateInput, syncState: SyncState): void
+  claimQueueItems(limit: number): QueueItem[]
   getPendingQueueItems(limit: number): QueueItem[]
   markQueueProcessing(id: number): void
   markQueueSuccess(id: number): void

@@ -19,7 +19,7 @@ export class ImapClient {
       port: options.port,
       tls: options.tls,
       tlsOptions: { rejectUnauthorized: false },
-      connTimeout: 30000
+      connTimeout: 60000
     }
     
     if (socksProxy) {

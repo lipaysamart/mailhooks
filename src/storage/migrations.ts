@@ -64,6 +64,10 @@ const MIGRATIONS = [
 
 export function runMigrations(db: unknown): void {
   const database = db as { exec: (sql: string) => void }
+  
+  database.exec('PRAGMA journal_mode = WAL')
+  database.exec('PRAGMA busy_timeout = 5000')
+  
   for (const sql of MIGRATIONS) {
     database.exec(sql)
   }

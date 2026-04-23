@@ -61,11 +61,12 @@ export class EmailSyncer {
     const syncState = this.db.getSyncState(accountName, folder)
     
     if (!syncState) {
-      this.logger.info({ accountName, folder, uidnext: box.uidnext }, 'First sync, recording uidnext')
+      const lastUid = box.uidnext - 1
+      this.logger.info({ accountName, folder, uidnext: box.uidnext, lastUid }, 'First sync, recording lastUid')
       this.db.saveSyncState({
         accountName,
         folder,
-        lastUid: box.uidnext.toString(),
+        lastUid: lastUid.toString(),
         lastSyncAt: new Date().toISOString()
       })
       return
@@ -87,20 +88,16 @@ export class EmailSyncer {
     for await (const message of this.fetchMessages(fetcher)) {
       try {
         const email = await this.processMessage(message, accountName, folder)
-        this.db.saveEmail(email)
         
-        // Enqueue for webhook
         const expiresHours = this.config.expires_hours ?? 24
         const expiresAt = new Date(Date.now() + expiresHours * 3600 * 1000).toISOString()
         
-        this.db.createQueueItem({
+        this.db.enqueueEmail(email, {
           emailId: email.id,
           accountName: email.accountName,
           folder: email.folder,
           expiresAt
-        })
-        
-        this.db.saveSyncState({
+        }, {
           accountName,
           folder,
           lastUid: email.id,
