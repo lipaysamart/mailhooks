@@ -1,0 +1,15 @@
+# ABOUTME: Production docker-compose configuration using pre-built images
+# ABOUTME: Deploys mailhooks with remote image lipaysam/mailhooks:v0.1.0
+version: '3.8'
+
+services:
+  mailhooks:
+    image: lipaysam/mailhooks:v0.1.0
+    container_name: mailhooks
+    restart: unless-stopped
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - SYNC_INTERVAL=${SYNC_INTERVAL:-300}

@@ -5,18 +5,32 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import { MailHooksDatabase } from './database'
 import { runMigrations } from './migrations'
 import { Database } from 'bun:sqlite'
-import { unlinkSync, existsSync } from 'fs'
+import { unlinkSync, existsSync, mkdirSync, rmdirSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import type { Email, SyncState, QueueItem } from '../types'
 
+function getTestDbPath(name: string): string {
+  const testDir = join(tmpdir(), 'mailhooks-test')
+  if (!existsSync(testDir)) mkdirSync(testDir, { recursive: true })
+  return join(testDir, `${name}.db`)
+}
+
 function cleanupDb(path: string) {
-  if (existsSync(path)) unlinkSync(path)
-  if (existsSync(`${path}-wal`)) unlinkSync(`${path}-wal`)
-  if (existsSync(`${path}-shm`)) unlinkSync(`${path}-shm`)
+  try {
+    if (existsSync(path)) unlinkSync(path)
+    if (existsSync(`${path}-wal`)) unlinkSync(`${path}-wal`)
+    if (existsSync(`${path}-shm`)) unlinkSync(`${path}-shm`)
+  } catch {}
 }
 
 describe('Concurrency Safety', () => {
   describe('SQLite Configuration', () => {
-    const walTestDb = './data/test-wal.db'
+    let walTestDb: string
+    
+    beforeEach(() => {
+      walTestDb = getTestDbPath('wal')
+    })
     
     afterEach(() => {
       cleanupDb(walTestDb)
@@ -40,10 +54,11 @@ describe('Concurrency Safety', () => {
   })
 
   describe('enqueueEmail Transaction', () => {
-    const enqueueTestDb = './data/test-enqueue.db'
+    let enqueueTestDb: string
     let db: MailHooksDatabase
 
     beforeEach(() => {
+      enqueueTestDb = getTestDbPath('enqueue')
       cleanupDb(enqueueTestDb)
       db = new MailHooksDatabase(enqueueTestDb)
       db.init()
@@ -98,10 +113,11 @@ describe('Concurrency Safety', () => {
   })
 
   describe('claimQueueItems Atomic Operation', () => {
-    const claimTestDb = './data/test-claim.db'
+    let claimTestDb: string
     let db: MailHooksDatabase
 
     beforeEach(() => {
+      claimTestDb = getTestDbPath('claim')
       cleanupDb(claimTestDb)
       db = new MailHooksDatabase(claimTestDb)
       db.init()
@@ -233,7 +249,11 @@ describe('Concurrency Safety', () => {
   })
 
   describe('Multi-Consumer Race Condition', () => {
-    const raceTestDb = './data/test-race.db'
+    let raceTestDb: string
+    
+    beforeEach(() => {
+      raceTestDb = getTestDbPath('race')
+    })
     
     afterEach(() => {
       cleanupDb(raceTestDb)
