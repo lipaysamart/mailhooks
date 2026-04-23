@@ -7,7 +7,6 @@ RUN bun install --production
 
 COPY src ./src
 COPY tsconfig.json ./
-RUN bun build ./src/index.ts --outdir ./dist --target bun
 
 VOLUME ["/app/data", "/app/config"]
 
@@ -16,4 +15,4 @@ ENV SYNC_INTERVAL=300
 ENV CONFIG_PATH=/app/config/config.yaml
 ENV DATABASE_PATH=/app/data/mailhooks.db
 
-CMD ["bun", "run", "dist/index.js"]
+CMD ["bun", "run", "src/index.ts"]

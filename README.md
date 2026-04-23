@@ -6,19 +6,21 @@
 
 | 特性 | 说明 |
 |------|------|
-| 📬 **多账户同步** | 同时监控多个 IMAP 邮箱账户 |
+| 📬 **多账户同步** | 同时监控多个 IMAP 箱账户 |
 | 🔄 **增量同步** | 基于 UID 的增量拉取，避免重复处理 |
+| 📝 **HTML 转 Markdown** | 自动将 HTML 邮件转换为 Markdown 格式 |
 | 📤 **Webhook 分发** | 将邮件 JSON 推送到任意 HTTP 端点 |
 | 🔁 **队列重试** | 失败自动重试，支持过期清理 |
 | 🧦 **SOCKS5 代理** | 支持 SOCKS5 代理连接 IMAP |
 | 🐳 **Docker 部署** | 一键容器化部署 |
-| 💾 **SQLite 存储** | 本地持久化，无需额外数据库依赖 |
+| 💾 **SQLite WAL** | WAL 模式 + 进程分离，并发安全 |
 
 ## 技术栈
 
 - **Runtime**: Bun.js (TypeScript)
 - **IMAP**: node-imap + mailparser
-- **Database**: bun:sqlite
+- **Database**: bun:sqlite (WAL 模式)
+- **Markdown**: turndown (HTML → Markdown)
 - **Logging**: pino
 - **Config**: YAML
 
@@ -119,50 +121,89 @@ services:
 
 ```json
 {
+  "id": "8464",
+  "accountName": "gmail",
+  "folder": "INBOX",
+  "from": {
+    "name": "Sender Name",
+    "address": "sender@example.com"
+  },
+  "to": ["recipient@example.com"],
   "subject": "邮件主题",
-  "from": "发件人名称",
-  "context": {
-    "text": "邮件正文 (截断至 500 字)",
-    "date": "2024-04-18T10:00:00Z",
-    "html": "<p>HTML 正文</p>",
-    "attachments": [
-      {
-        "filename": "document.pdf",
-        "contentType": "application/pdf",
-        "size": 102400
-      }
-    ]
-  }
+  "text": "纯文本正文内容",
+  "body": "## 标题\n\nMarkdown 格式正文...",
+  "attachments": [
+    {
+      "filename": "document.pdf",
+      "contentType": "application/pdf",
+      "size": 102400
+    }
+  ],
+  "date": "2024-04-18T10:00:00Z",
+  "syncedAt": "2024-04-18T10:05:00Z",
+  "flags": ["\\Seen"]
 }
 ```
+
+**字段说明**：
+- `text`: 邮件原始纯文本内容（可能为 null）
+- `body`: HTML 转 Markdown 格式内容（无 HTML 时为空字符串）
 
 ## 架构设计
 
 ```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  IMAP Accounts  │────▶│  EmailSyncer    │────▶│    SQLite DB    │
-│  (Gmail, etc.)  │     │  (增量同步)      │     │  (邮件 + 队列)   │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                                                        │
-                        ┌─────────────────┐             │
-                        │ WebhookSender   │◀────────────┘
-                        │  (队列消费)      │
-                        └─────────────────┘
-                                │
-                                ▼
-                        ┌─────────────────┐
-                        │  Webhook 端点   │
-                        │  (Telegram,等)  │
-                        └─────────────────┘
+┌─────────────────┐
+│   index.ts      │  主进程：spawn sync.ts + consumer.ts
+│   (Main)        │
+└─────────────────┘
+        │
+        ├──────────────────────┐
+        │                      │
+        ▼                      ▼
+┌─────────────────┐    ┌─────────────────┐
+│   sync.ts       │    │  consumer.ts    │
+│  (Sync 进程)    │    │ (Consumer 进程) │
+└─────────────────┘    └─────────────────┘
+        │                      │
+        ▼                      │
+┌─────────────────┐            │
+│  IMAP Accounts  │            │
+│  (Gmail, etc.)  │            │
+└─────────────────┘            │
+        │                      │
+        ▼                      │
+┌─────────────────┐            │
+│  EmailSyncer    │            │
+│  (增量同步)      │            │
+└─────────────────┘            │
+        │                      │
+        ▼                      │
+┌─────────────────┐◀───────────┘
+│   SQLite DB     │  WAL 模式 + busy_timeout=5000
+│  (邮件 + 队列)   │  claimQueueItems() 原子操作
+└─────────────────┘
+        │
+        ▼
+┌─────────────────┐
+│ WebhookSender   │
+│  (队列消费)      │
+└─────────────────┘
+        │
+        ▼
+┌─────────────────┐
+│  Webhook 端点   │
+│  (Dify, 等)     │
+└─────────────────┘
 ```
 
 ### 工作流程
 
-1. **Sync Loop**: 定时轮询 IMAP 账户，增量拉取新邮件
-2. **Queue**: 新邮件存入 SQLite，同时加入 Webhook 发送队列
-3. **Consumer**: 定时消费队列，发送 Webhook
-4. **Retry**: 失败项自动重试，超过过期时间标记为 expired
-5. **Cleanup**: 定期清理已完成/过期的队列记录
+1. **Main**: 主进程启动，spawn sync.ts 和 consumer.ts 为独立进程
+2. **Sync Loop**: sync.ts 定时轮询 IMAP，增量拉取新邮件入队
+3. **First Sync**: 首次同步记录 `uidnext - 1`，只同步启动后的新邮件
+4. **Consumer Loop**: consumer.ts 定时消费队列，发送 Webhook
+5. **Retry**: 失败项自动重试，超过过期时间标记为 expired
+6. **Concurrency Safety**: SQLite WAL 模式 + 事务包裹入队操作
 
 ## 配置参数
 
@@ -177,6 +218,38 @@ services:
 
 ## 目录结构
 
+```
+mailhooks/
+├── src/
+│   ├── index.ts          # 主入口，spawn sync.ts + consumer.ts
+│   ├── sync.ts           # 同步进程入口
+│   ├── consumer.ts       # 队列消费进程入口
+│   ├── types.ts          # 类型定义
+│   ├── config/
+│   │   ├── loader.ts     # YAML 配置加载
+│   │   ├── schema.ts     # 配置验证
+│   │   └── types.ts      # 配置类型
+│   ├── imap/
+│   │   ├── client.ts     # IMAP 客户端封装
+│   │   ├── parser.ts     # 邮件解析
+│   │   └── syncer.ts     # 同步逻辑（首次同步 uidnext-1）
+│   ├── storage/
+│   │   ├── database.ts   # SQLite CRUD（WAL + claimQueueItems）
+│   │   ├── migrations.ts # 数据库迁移（PRAGMA WAL）
+│   │   └── types.ts      # 存储类型
+│   ├── webhooks/
+│   │   └── sender.ts     # Webhook 发送（新 Payload 格式）
+│   └── utils/
+│       ├── env.ts        # 环境变量
+│       ├── logger.ts     # 日志封装
+│       └── markdown.ts   # HTML → Markdown 转换
+├── scripts/
+│   └── send-test-email.ts # 测试邮件发送脚本
+├── data/                 # SQLite 数据库目录
+├── config.yaml           # 配置文件（在 .gitignore）
+├── Dockerfile
+├── docker-compose.yml
+└── package.json
 ```
 mailhooks/
 ├── src/

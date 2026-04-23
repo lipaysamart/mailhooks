@@ -57,7 +57,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build
+      - name: Build (optional)
         run: bun run build
 
       - name: Upload artifact
@@ -66,3 +66,4 @@ jobs:
           name: dist
           path: dist/
           retention-days: 7
+          if-no-files-found: ignore
