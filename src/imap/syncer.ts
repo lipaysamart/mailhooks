@@ -118,8 +118,15 @@ export class EmailSyncer {
     const f = fetcher as { on: (event: string, cb: Function) => void }
     
     const messages: { uid: number; raw: string }[] = []
+    let pendingMessages = 0
+    let fetchEnded = false
+    let resolveAllDone: () => void
+    const allDonePromise = new Promise<void>((resolve) => {
+      resolveAllDone = resolve
+    })
     
     f.on('message', (msg: unknown) => {
+      pendingMessages++
       const m = msg as { 
         on: (event: string, cb: Function) => void
         uid?: number
@@ -141,12 +148,21 @@ export class EmailSyncer {
       
       m.on('end', () => {
         messages.push({ uid, raw })
+        pendingMessages--
+        if (fetchEnded && pendingMessages === 0) {
+          resolveAllDone()
+        }
       })
     })
     
-    await new Promise<void>((resolve) => {
-      f.on('end', () => resolve())
+    f.on('end', () => {
+      fetchEnded = true
+      if (pendingMessages === 0) {
+        resolveAllDone()
+      }
     })
+    
+    await allDonePromise
     
     for (const msg of messages) {
       yield msg
