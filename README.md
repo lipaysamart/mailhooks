@@ -90,6 +90,31 @@ bun run build
 
 ## Docker 部署
 
+### 从 Docker Hub 拉取
+
+```bash
+# 拉取指定版本
+docker pull lipaysam/mailhooks:0.1.2
+
+# 或拉取最新版本
+docker pull lipaysam/mailhooks:latest
+```
+
+### 运行容器
+
+```bash
+docker run -d \
+  --name mailhooks \
+  --restart always \
+  -v ./config:/app/config \
+  -v ./data:/app/data \
+  -e LOG_LEVEL=info \
+  -e SYNC_INTERVAL=300 \
+  lipaysam/mailhooks:latest
+```
+
+### 使用 Docker Compose
+
 ```bash
 # 构建并启动
 docker-compose up -d
@@ -103,7 +128,7 @@ docker logs -f mailhooks
 ```yaml
 services:
   mailhooks:
-    build: .
+    image: lipaysam/mailhooks:latest
     restart: unless-stopped
     volumes:
       - ./config:/app/config
