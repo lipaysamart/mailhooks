@@ -74,7 +74,7 @@ export class EmailSyncer {
     
     const lastUid = parseInt(syncState.lastUid, 10)
     const allUids = await client.search(['ALL'])
-    const uids = allUids.filter(uid => uid >= lastUid)
+    const uids = allUids.filter(uid => uid > lastUid)
     
     if (uids.length === 0) {
       this.logger.info({ accountName, folder }, 'No new emails')

@@ -49,11 +49,11 @@ export class WebhookSender {
     
     try {
       await this.makeRequest(config.url, method, headers, body, timeout)
-      this.logger.info('Webhook sent')
+      this.logger.info({ emailId: email.id }, 'Webhook sent successfully')
       return { success: true }
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err)
-      this.logger.error({ error }, 'Webhook failed')
+      this.logger.error({ emailId: email.id, error }, 'Webhook send failed')
       return { success: false, error }
     }
   }

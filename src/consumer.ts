@@ -60,12 +60,14 @@ async function runQueueConsumer(
         
         if (result.success) {
           db.markQueueSuccess(item.id)
+          logger.info({ itemId: item.id, emailId: item.emailId }, '[CONSUMER] Webhook sent successfully')
         } else {
           if (new Date() > new Date(item.expiresAt)) {
             db.markQueueExpired(item.id, result.error ?? 'Expired')
-            logger.warn({ itemId: item.id }, '[CONSUMER] Queue item expired')
+            logger.warn({ itemId: item.id, emailId: item.emailId, error: result.error }, '[CONSUMER] Webhook expired')
           } else {
             db.markQueuePending(item.id, result.error ?? 'Unknown error')
+            logger.warn({ itemId: item.id, emailId: item.emailId, error: result.error }, '[CONSUMER] Webhook failed, will retry')
           }
         }
       } catch (err) {
