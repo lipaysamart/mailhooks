@@ -4,16 +4,16 @@
 
 ## 核心特性
 
-| 特性 | 说明 |
-|------|------|
-| 📬 **多账户同步** | 同时监控多个 IMAP 箱账户 |
-| 🔄 **增量同步** | 基于 UID 的增量拉取，避免重复处理 |
+| 特性                    | 说明                                 |
+| ----------------------- | ------------------------------------ |
+| 📬 **多账户同步**       | 同时监控多个 IMAP 箱账户             |
+| 🔄 **增量同步**         | 基于 UID 的增量拉取，避免重复处理    |
 | 📝 **HTML 转 Markdown** | 自动将 HTML 邮件转换为 Markdown 格式 |
-| 📤 **Webhook 分发** | 将邮件 JSON 推送到任意 HTTP 端点 |
-| 🔁 **队列重试** | 失败自动重试，支持过期清理 |
-| 🧦 **SOCKS5 代理** | 支持 SOCKS5 代理连接 IMAP |
-| 🐳 **Docker 部署** | 一键容器化部署 |
-| 💾 **SQLite WAL** | WAL 模式 + 进程分离，并发安全 |
+| 📤 **Webhook 分发**     | 将邮件 JSON 推送到任意 HTTP 端点     |
+| 🔁 **队列重试**         | 失败自动重试，支持过期清理           |
+| 🧦 **SOCKS5 代理**      | 支持 SOCKS5 代理连接 IMAP            |
+| 🐳 **Docker 部署**      | 一键容器化部署                       |
+| 💾 **SQLite WAL**       | WAL 模式 + 进程分离，并发安全        |
 
 ## 技术栈
 
@@ -52,7 +52,7 @@ accounts:
     host: "imap.gmail.com"
     port: 993
     username: "your-email@gmail.com"
-    password: "${GMAIL_PASSWORD}"  # 支持环境变量
+    password: "${GMAIL_PASSWORD}" # 支持环境变量
     folders:
       - "INBOX"
 
@@ -146,6 +146,7 @@ services:
 ```
 
 **字段说明**：
+
 - `text`: 邮件原始纯文本内容（可能为 null）
 - `body`: HTML 转 Markdown 格式内容（无 HTML 时为空字符串）
 
@@ -207,18 +208,18 @@ services:
 
 ## 配置参数
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `sync_interval` | 300 | IMAP 同步间隔 (秒) |
-| `poll_interval` | 30 | Webhook 队列轮询间隔 (秒) |
-| `expires_hours` | 24 | 队列项过期时间 (小时) |
-| `cleanup_days` | 7 | 清理已完成记录的天数 |
-| `log_level` | info | 日志级别: debug/info/warn/error |
-| `socks_proxy` | - | SOCKS5 代理地址 |
+| 参数            | 默认值 | 说明                            |
+| --------------- | ------ | ------------------------------- |
+| `sync_interval` | 300    | IMAP 同步间隔 (秒)              |
+| `poll_interval` | 30     | Webhook 队列轮询间隔 (秒)       |
+| `expires_hours` | 24     | 队列项过期时间 (小时)           |
+| `cleanup_days`  | 7      | 清理已完成记录的天数            |
+| `log_level`     | info   | 日志级别: debug/info/warn/error |
+| `socks_proxy`   | -      | SOCKS5 代理地址                 |
 
 ## 目录结构
 
-```
+```sh
 mailhooks/
 ├── src/
 │   ├── index.ts          # 主入口，spawn sync.ts + consumer.ts
@@ -247,34 +248,6 @@ mailhooks/
 │   └── send-test-email.ts # 测试邮件发送脚本
 ├── data/                 # SQLite 数据库目录
 ├── config.yaml           # 配置文件（在 .gitignore）
-├── Dockerfile
-├── docker-compose.yml
-└── package.json
-```
-mailhooks/
-├── src/
-│   ├── index.ts          # 入口，协调各模块
-│   ├── types.ts          # 类型定义
-│   ├── config/
-│   │   ├── loader.ts     # YAML 配置加载
-│   │   ├── schema.ts     # 配置验证
-│   │   └── types.ts      # 配置类型
-│   ├── imap/
-│   │   ├── client.ts     # IMAP 客户端封装
-│   │   ├── parser.ts     # 邮件解析
-│   │   └── syncer.ts     # 同步逻辑
-│   ├── storage/
-│   │   ├── database.ts   # SQLite CRUD
-│   │   ├── migrations.ts # 数据库迁移
-│   │   └── types.ts      # 存储类型
-│   └── webhooks/
-│   │   ├── sender.ts     # Webhook 发送
-│   │   └── types.ts      # Webhook 类型
-│   └── utils/
-│       ├── env.ts        # 环境变量
-│       └── logger.ts     # 日志封装
-├── data/                 # SQLite 数据库目录
-├── config.yaml           # 配置文件
 ├── Dockerfile
 ├── docker-compose.yml
 └── package.json
