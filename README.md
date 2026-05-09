@@ -90,6 +90,42 @@ bun run start
 bun run build
 ```
 
+## 支持的邮箱列表
+
+### 国际邮箱服务商
+
+| 邮箱服务商 | IMAP 服务器 | 文件夹名称 | 特殊说明 |
+|-----------|------------|-----------|---------|
+| **Gmail** | `imap.gmail.com:993` | `INBOX` | 需启用 IMAP，使用应用专用密码 |
+| **Outlook/Hotmail** | `imap-mail.outlook.com:993` | `INBOX` | 需启用 IMAP |
+| **Yahoo Mail** | `imap.mail.yahoo.com:993` | `INBOX` | 需生成应用密码 |
+| **iCloud** | `imap.mail.me.com:993` | `INBOX` | 需启用 IMAP，使用应用专用密码 |
+
+### 国内邮箱服务商
+
+| 邮箱服务商 | IMAP 服务器 | 文件夹名称 | 特殊说明 |
+|-----------|------------|-----------|---------|
+| **163 邮箱** | `imap.163.com:993` | `&UXZO1mWHTvZZOQ-` | ⚠️ 需使用 UTF-7 编码，需客户端授权码 |
+| **126 邮箱** | `imap.126.com:993` | `&UXZO1mWHTvZZOQ-` | ⚠️ 需使用 UTF-7 编码，需客户端授权码 |
+| **QQ 邮箱** | `imap.qq.com:993` | `INBOX` | 需启用 IMAP，使用授权码 |
+| **阿里邮箱** | `imap.aliyun.com:993` | `INBOX` | 企业邮箱标准配置 |
+
+### 文件夹名称说明
+
+**国际邮箱**：直接使用英文文件夹名，如：
+- `INBOX` - 收件箱
+- `Sent` - 已发送
+- `Drafts` - 草稿
+- `Trash` - 已删除
+
+**国内邮箱（163/126）**：需使用 IMAP UTF-7 编码格式：
+- `&UXZO1mWHTvZZOQ-` - 收件箱（中文"收件箱"的 UTF-7 编码）
+- `&g0l6O3Rul-` - 已发送
+- `&DCyi4S4-` - 草稿
+- `&i6KWBZ7-` - 已删除
+
+> **注意**：由于运行时环境限制，中文文件夹名在 Bun.js 下会报错，必须使用 UTF-7 编码格式。
+
 ## Docker 部署
 
 ```bash
