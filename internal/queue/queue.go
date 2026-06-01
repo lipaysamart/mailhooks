@@ -131,7 +131,7 @@ func (q *Queue) Consume(ctx context.Context) {
 				q.wg.Add(1)
 				go func(item *model.QueueItem) {
 					defer q.wg.Done()
-					err := webhook.Send(ctx, item.WebhookURL, item.Email.AccountName, item.WebhookAddr, item.Email, item.WebhookTmout)
+					err := webhook.Send(ctx, item.WebhookURL, item.Email.AccountName, item.Email, item.WebhookTmout)
 					if err == nil {
 						q.MarkDone(item.ID)
 					} else {

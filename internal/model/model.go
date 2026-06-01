@@ -15,15 +15,18 @@ type Address struct {
 type Email struct {
 	MessageID    string       `json:"message_id"`
 	AccountName  string       `json:"account_name"`
+	Folder       string       `json:"folder"`
 	Subject      string       `json:"subject"`
 	From         *Address     `json:"from"`
 	To           []Address    `json:"to"`
 	Cc           []Address    `json:"cc"`
 	Date         time.Time    `json:"date"`
+	SyncedAt     time.Time    `json:"synced_at"`
 	TextBody     string       `json:"text_body,omitempty"`
 	HTMLBody     string       `json:"html_body,omitempty"`
 	MarkdownBody string       `json:"markdown_body,omitempty"`
 	Attachments  []Attachment `json:"attachments,omitempty"`
+	Flags        []string     `json:"flags,omitempty"`
 }
 
 type Attachment struct {
@@ -40,7 +43,6 @@ type QueueItem struct {
 	MaxRetries    int       `json:"max_retries"`
 	NextRetryAt   time.Time `json:"next_retry_at"`
 	ExpireAt      time.Time `json:"expire_at"`
-	WebhookURL    string    `json:"-"`
-	WebhookAddr   string    `json:"-"`
+	WebhookURL    string        `json:"-"`
 	WebhookTmout  time.Duration `json:"-"`
 }

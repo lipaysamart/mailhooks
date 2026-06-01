@@ -1,2 +1,5 @@
 .pi
 plan.md
+mailhooks.yaml
+mailhooks
+!config.example.yaml

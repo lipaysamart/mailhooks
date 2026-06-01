@@ -109,6 +109,9 @@ func (s *Syncer) Sync(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("load state: %w", err)
 	}
+
+	isInitialSync := state.LastUID == 0
+
 	if uidValidity != state.UIDValidity {
 		s.logger.Info("UIDValidity changed, full resync",
 			zap.String("account", s.cfg.Name),
@@ -116,6 +119,7 @@ func (s *Syncer) Sync(ctx context.Context) error {
 			zap.Uint32("new", uidValidity),
 		)
 		state.LastUID = 0
+		isInitialSync = true
 	}
 
 	if uint32(uidNext) <= state.LastUID+1 {
@@ -167,6 +171,25 @@ func (s *Syncer) Sync(ctx context.Context) error {
 			continue
 		}
 		email.AccountName = s.cfg.Name
+		email.Folder = "INBOX"
+		email.SyncedAt = time.Now()
+		if msgBuf.Flags != nil {
+			for _, f := range msgBuf.Flags {
+				email.Flags = append(email.Flags, string(f))
+			}
+		}
+
+		// Initial sync: update state only, do not enqueue for webhook delivery
+		if isInitialSync {
+			s.logger.Debug("initial sync, skipping enqueue",
+				zap.String("account", s.cfg.Name),
+				zap.Uint32("uid", uint32(msgBuf.UID)),
+			)
+			if msgBuf.UID > imap.UID(state.LastUID) {
+				state.LastUID = uint32(msgBuf.UID)
+			}
+			continue
+		}
 
 		itemID := email.MessageID
 		if itemID == "" {
@@ -176,13 +199,12 @@ func (s *Syncer) Sync(ctx context.Context) error {
 		}
 
 		s.queue.Push(&model.QueueItem{
-			ID:          itemID,
-			Email:       email,
-			MaxRetries:  queueCfg.MaxRetries,
-			NextRetryAt: time.Now(),
-			ExpireAt:    time.Now().Add(queueCfg.ExpireAfter),
-			WebhookURL:  s.cfg.WebhookURL,
-			WebhookAddr: s.cfg.Address,
+			ID:           itemID,
+			Email:        email,
+			MaxRetries:   queueCfg.MaxRetries,
+			NextRetryAt:  time.Now(),
+			ExpireAt:     time.Now().Add(queueCfg.ExpireAfter),
+			WebhookURL:   s.cfg.WebhookURL,
 			WebhookTmout: s.cfg.WebhookTimeout,
 		})
 

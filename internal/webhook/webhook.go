@@ -11,28 +11,34 @@ import (
 	"github.com/lipaysamart/mailhooks/internal/model"
 )
 
-type Payload struct {
-	Event     string      `json:"event"`
-	Account   AccountInfo `json:"account"`
-	Email     *model.Email `json:"email"`
-	Timestamp time.Time   `json:"timestamp"`
+type AttachmentPayload struct {
+	Filename    string `json:"filename"`
+	ContentType string `json:"contentType"`
+	Size        int    `json:"size"`
 }
 
-type AccountInfo struct {
+type FromPayload struct {
 	Name    string `json:"name"`
 	Address string `json:"address"`
 }
 
-func Send(ctx context.Context, url, accountName, accountAddress string, email *model.Email, timeout time.Duration) error {
-	payload := Payload{
-		Event: "email.received",
-		Account: AccountInfo{
-			Name:    accountName,
-			Address: accountAddress,
-		},
-		Email:     email,
-		Timestamp: time.Now().UTC(),
-	}
+type EmailPayload struct {
+	ID          string             `json:"id"`
+	AccountName string             `json:"accountName"`
+	Folder      string             `json:"folder"`
+	From        *FromPayload       `json:"from"`
+	To          []string           `json:"to"`
+	Subject     string             `json:"subject"`
+	Text        string             `json:"text"`
+	Body        string             `json:"body"`
+	Attachments []AttachmentPayload `json:"attachments,omitempty"`
+	Date        string             `json:"date"`
+	SyncedAt    string             `json:"syncedAt"`
+	Flags       []string           `json:"flags,omitempty"`
+}
+
+func Send(ctx context.Context, url, accountName string, email *model.Email, timeout time.Duration) error {
+	payload := buildPayload(accountName, email)
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal payload: %w", err)
@@ -57,4 +63,46 @@ func Send(ctx context.Context, url, accountName, accountAddress string, email *m
 		return fmt.Errorf("webhook returned %d", resp.StatusCode)
 	}
 	return nil
+}
+
+func buildPayload(accountName string, email *model.Email) EmailPayload {
+	p := EmailPayload{
+		ID:          email.MessageID,
+		AccountName: accountName,
+		Folder:      email.Folder,
+		Subject:     email.Subject,
+		Text:        email.TextBody,
+		Date:        email.Date.UTC().Format(time.RFC3339),
+		SyncedAt:    email.SyncedAt.UTC().Format(time.RFC3339),
+	}
+
+	if email.From != nil {
+		p.From = &FromPayload{
+			Name:    email.From.Name,
+			Address: email.From.Address,
+		}
+	}
+
+	for _, addr := range email.To {
+		p.To = append(p.To, addr.Address)
+	}
+
+	// Use markdown body if available, otherwise fall back to HTML body as plain text hint
+	if email.MarkdownBody != "" {
+		p.Body = email.MarkdownBody
+	}
+
+	for _, a := range email.Attachments {
+		p.Attachments = append(p.Attachments, AttachmentPayload{
+			Filename:    a.Filename,
+			ContentType: a.MIMEType,
+			Size:        a.Size,
+		})
+	}
+
+	if email.Flags != nil {
+		p.Flags = email.Flags
+	}
+
+	return p
 }
