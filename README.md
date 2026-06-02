@@ -61,7 +61,31 @@ go build -o mailhooks ./cmd/mailhooks/
 ./mailhooks -config mailhooks.yaml
 ```
 
-### 3. 命令行参数
+### 3. 用 Docker 跑
+
+确保当前目录有 `config.yaml` 配置文件，然后：
+
+```bash
+# 拉取镜像并启动（后台）
+docker compose up -d
+
+# 查看日志
+docker compose logs -f
+
+# 停止
+docker compose down
+```
+
+也可以直接跑：
+
+```bash
+docker run -d --name mailhooks \
+  -v $(pwd)/config.yaml:/app/config.yaml:ro \
+  -v $(pwd)/data:/app/data \
+  ghcr.io/lipaysamart/mailhooks:latest
+```
+
+### 4. 命令行参数
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|

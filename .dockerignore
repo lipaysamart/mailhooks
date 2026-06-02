@@ -1,0 +1,29 @@
+# Git
+.git/
+.gitignore
+
+# Go
+# go.sum is needed by Dockerfile COPY for layer caching
+# go.sum
+
+# Build artifacts
+/tmp/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Config (user-provided, should be mounted)
+config.yaml
+mailhooks.yaml
+
+# State data (persisted by app)
+data/
+
+# Ephemeral dev artifacts
+progress.md
+scout/
+lint-fix-report.md

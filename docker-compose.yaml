@@ -1,0 +1,10 @@
+services:
+  mailhooks:
+    image: ghcr.io/lipaysamart/mailhooks:latest
+    container_name: mailhooks
+    restart: unless-stopped
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data:/app/data
+    environment:
+      - TZ=Asia/Shanghai
