@@ -14,6 +14,7 @@ import (
 
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
+	_ "github.com/emersion/go-message/charset"
 	"github.com/emersion/go-message/mail"
 	"github.com/lipaysamart/mailhooks/internal/config"
 	"github.com/lipaysamart/mailhooks/internal/converter"
