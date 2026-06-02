@@ -1,3 +1,11 @@
+# ────────────────────────────────────────────────────────────────────
+# MailHooks Release
+# ────────────────────────────────────────────────────────────────────
+# Triggered on git tag push v*.
+# - goreleaser: build binaries + archive + checksum
+# - docker:     build & push multi-arch image to GHCR + Aliyun ACR
+# ────────────────────────────────────────────────────────────────────
+
 name: Release
 
 on:
@@ -5,20 +13,27 @@ on:
     tags:
       - 'v*'
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
   packages: write
+  attestations: write
 
 jobs:
+  # ── Binaries ──────────────────────────────────────────────────────
   goreleaser:
-    name: GoReleaser
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v5
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
           go-version: '1.26'
           check-latest: true
@@ -32,30 +47,31 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # ── Docker images ─────────────────────────────────────────────────
   docker:
-    name: Docker
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
+      - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GitHub Container Registry
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Log in to Aliyun Container Registry
+      - name: Login to Aliyun ACR
         uses: docker/login-action@v3
         with:
           registry: registry.cn-shenzhen.aliyuncs.com
           username: ${{ secrets.ALIYUN_REGISTRY_USERNAME }}
           password: ${{ secrets.ALIYUN_REGISTRY_PASSWD }}
 
-      - name: Extract metadata
+      - name: Generate image tags
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -67,12 +83,15 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix=
 
-      - name: Build and push
+      - name: Build & push
         uses: docker/build-push-action@v6
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
