@@ -226,4 +226,4 @@ mailhooks 向配置的 `webhook_url` 发送 `POST` 请求，`Content-Type: appli
 
 ## 许可证
 
-本项目尚未添加开源许可证文件，留待后续补充。
+[MIT](LICENSE)
