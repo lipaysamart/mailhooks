@@ -85,7 +85,7 @@ func (s *Syncer) Sync(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if err := client.Login(s.cfg.Username, s.cfg.Password).Wait(); err != nil {
 		return fmt.Errorf("login: %w", err)
