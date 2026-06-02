@@ -61,7 +61,23 @@ go build -o mailhooks ./cmd/mailhooks/
 ./mailhooks -config mailhooks.yaml
 ```
 
-### 3. 命令行参数
+### 3. 用 Docker 跑
+
+```bash
+# 构建镜像
+docker compose build
+
+# 启动（前台）
+docker compose up
+
+# 启动（后台）
+docker compose up -d
+
+# 查看日志
+docker compose logs -f
+```
+
+### 4. 命令行参数
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
