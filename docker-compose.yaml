@@ -1,6 +1,6 @@
 services:
   mailhooks:
-    build: .
+    image: ghcr.io/lipaysamart/mailhooks:latest
     container_name: mailhooks
     restart: unless-stopped
     volumes:
