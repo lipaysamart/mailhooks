@@ -3,7 +3,8 @@
 .gitignore
 
 # Go
-go.sum
+# go.sum is needed by Dockerfile COPY for layer caching
+# go.sum
 
 # Build artifacts
 /tmp/
