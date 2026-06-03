@@ -31,6 +31,7 @@ type EmailPayload struct {
 	Subject     string             `json:"subject"`
 	Text        string             `json:"text"`
 	Body        string             `json:"body"`
+	HTML        string             `json:"html,omitempty"`
 	Attachments []AttachmentPayload `json:"attachments,omitempty"`
 	Date        string             `json:"date"`
 	SyncedAt    string             `json:"syncedAt"`
@@ -72,6 +73,8 @@ func buildPayload(accountName string, email *model.Email) EmailPayload {
 		Folder:      email.Folder,
 		Subject:     email.Subject,
 		Text:        email.TextBody,
+		Body:        email.TextBody,
+		HTML:        email.HTMLBody,
 		Date:        email.Date.UTC().Format(time.RFC3339),
 		SyncedAt:    email.SyncedAt.UTC().Format(time.RFC3339),
 	}
@@ -85,11 +88,6 @@ func buildPayload(accountName string, email *model.Email) EmailPayload {
 
 	for _, addr := range email.To {
 		p.To = append(p.To, addr.Address)
-	}
-
-	// Use markdown body if available, otherwise fall back to HTML body as plain text hint
-	if email.MarkdownBody != "" {
-		p.Body = email.MarkdownBody
 	}
 
 	for _, a := range email.Attachments {

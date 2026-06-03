@@ -19,12 +19,10 @@ type Email struct {
 	Subject      string       `json:"subject"`
 	From         *Address     `json:"from"`
 	To           []Address    `json:"to"`
-	Cc           []Address    `json:"cc"`
 	Date         time.Time    `json:"date"`
 	SyncedAt     time.Time    `json:"synced_at"`
 	TextBody     string       `json:"text_body,omitempty"`
 	HTMLBody     string       `json:"html_body,omitempty"`
-	MarkdownBody string       `json:"markdown_body,omitempty"`
 	Attachments  []Attachment `json:"attachments,omitempty"`
 	Flags        []string     `json:"flags,omitempty"`
 }

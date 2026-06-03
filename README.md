@@ -9,11 +9,11 @@ mailhooks 把 IMAP 邮箱的新邮件转到 Webhook。定时拉取 INBOX，解�
 - **多账户** — 同时监听多个邮箱，各跑各的，互不阻塞
 - **增量同步** — 只拉上次之后的新邮件，靠 IMAP UID 判断，不会重复处理
 - **初始同步跳过** — 首次启动或 UIDValidity 变了不推 Webhook，免得历史邮件轰炸
-- **HTML → Markdown** — 自动把 HTML 正文转成 Markdown
 - **附件** — 提取文件名、MIME 类型、大小，可以选择把内容 Base64 编码塞进去
 - **指数退避重试** — Webhook 失败自动重试，指数退避 + 随机抖动，不会扎堆重试
-- **过期清理** — 超时的队列项自动丢掉，内存不会无限涨
+- **过期清理** — 超时的队列项自动丢掉
 - **进度持久化** — 同步进度存 JSON 文件，崩了重启接着来（原子写入）
+- **队列持久化** — SQLite 存储队列，重启不丢消息
 - **结构化日志** — 用 [zap](https://github.com/uber-go/zap)，console 和 JSON 两种格式
 - **静态二进制** — GoReleaser 打 `CGO_ENABLED=0` 的纯静态包，Linux / macOS 都行（amd64 / arm64）
 
@@ -27,7 +27,7 @@ mailhooks 把 IMAP 邮箱的新邮件转到 Webhook。定时拉取 INBOX，解�
 cp config.example.yaml mailhooks.yaml
 ```
 
-编辑 `mailhooks.yaml`，至少填一个账户的 `host`、`username`、`password`、`address` 和 `webhook_url`。
+编辑 `mailhooks.yaml`，至少填一个账户的 `host`、`username`、`password` 和 `webhook_url`。
 
 ### 2. 运行
 
@@ -104,7 +104,6 @@ accounts:
     tls: true                       # 是否启用 TLS
     username: "user@example.com"    # 登录用户名
     password: "your-password"       # 登录密码
-    address: "user@example.com"     # 邮件地址（用于 Webhook payload）
     webhook_url: "https://hooks.example.com/email"  # Webhook 接收 URL
     webhook_timeout: "30s"          # Webhook 请求超时（默认 30s）
     sync_interval: "60s"            # IMAP 同步间隔（默认 60s）
@@ -117,6 +116,7 @@ queue:
   retry_delay: "30s"       # 重试基础延迟 — 退避公式: delay × 2^(n-1) ± 25% jitter（默认 30s）
   expire_after: "24h"      # 队列项过期时间，超时丢弃（默认 24h）
   cleanup_interval: "5m"   # 过期清理间隔（默认 5m）
+  db_path: "data/queue.db" # SQLite 数据库路径（默认 data/queue.db）
 
 # 日志
 log:
@@ -136,6 +136,7 @@ log:
 | `queue.retry_delay` | `30s` |
 | `queue.expire_after` | `24h` |
 | `queue.cleanup_interval` | `5m` |
+| `queue.db_path` | `data/queue.db` |
 | `log.level` | `info` |
 | `log.format` | `console` |
 
@@ -145,8 +146,7 @@ log:
 cmd/mailhooks/main.go          — 程序入口，组装所有组件并启动 goroutine
 internal/config/config.go      — YAML 配置解析、默认值填充、Duration 校验
 internal/syncer/syncer.go      — IMAP 连接、UID 增量查询、MIME 解析、入队
-internal/converter/converter.go — HTML → Markdown 转换（单行封装）
-internal/queue/queue.go        — 内存队列、Push/PopReady/MarkDone/MarkFailed、指数退避
+internal/queue/queue.go        — SQLite 持久化队列、Push/PopReady/MarkDone/MarkFailed、指数退避
 internal/webhook/webhook.go    — JSON payload 序列化、HTTP POST 发送
 internal/state/state.go        — JSON 文件状态持久化（原子写入）
 internal/model/model.go        — 领域数据结构定义
@@ -157,7 +157,7 @@ internal/logger/logger.go      — zap 日志初始化
 
 1. `LoadConfig` → 解析 YAML
 2. `logger.New` → 初始化日志
-3. `queue.New` → 创建内存队列
+3. `queue.New` → 打开 SQLite 队列
 4. `state.NewStore("data")` → 创建状态存储
 5. 遍历每个账户：
    - `syncer.New(...)` → 创建同步器
@@ -169,26 +169,18 @@ internal/logger/logger.go      — zap 日志初始化
 ## 数据流
 
 ```text
-┌───────────────┐     IMAP FETCH      ┌───────────┐
-│  IMAP Server  │ ◄────────────────── │  Syncer   │  (per-account goroutine)
-│  (INBOX)      │ ── raw MIME ──────► │           │
-└───────────────┘                     └─────┬─────┘
-                                            │ parseMIME()
-                                            │ + HTML→Markdown
-                                            ▼
-                                     ┌─────────────┐
-                                     │   Queue     │  (memory, mutex-protected)
-                                     │   Push()    │
-                                     └─────┬───────┘
-                                           │ Consume() ticker (poll_interval)
-                                           ▼
-                                     ┌───────────┐
-                                     │  Webhook  │  HTTP POST (JSON)
-                                     │  Send()   │ ───────────────────► 目标 URL
-                                     └───────────┘
-                                           │
-                                    success → MarkDone()
-                                    fail    → MarkFailed() → 指数退避重入队
+IMAP Server ──raw MIME──► Syncer (per-account goroutine)
+                               │ parseMIME()
+                               ▼
+                          Queue (SQLite, 单连接)
+                          Push()
+                               │
+                    Consume() ticker (poll_interval)
+                               ▼
+                          Webhook Send() ──HTTP POST──► 目标 URL
+                               │
+                        success → MarkDone()  (DELETE)
+                        fail    → MarkFailed() (backoff + re-enqueue)
 ```
 
 ### 状态持久化
@@ -214,7 +206,7 @@ internal/logger/logger.go      — zap 日志初始化
   "to": ["recipient@example.com"],
   "subject": "邮件主题",
   "text": "纯文本正文内容",
-  "body": "**Markdown** 格式的正文内容",
+  "body": "纯文本正文内容",
   "date": "2026-06-01T12:00:00Z",
   "syncedAt": "2026-06-01T12:01:30Z",
   "flags": ["\\Seen"],
@@ -239,7 +231,7 @@ internal/logger/logger.go      — zap 日志初始化
 | `to` | string[] | 收件人地址列表 |
 | `subject` | string | 邮件主题 |
 | `text` | string | 纯文本正文 |
-| `body` | string | Markdown 正文，由 HTML 部分转换；没有 HTML 的话这个字段就没有 |
+| `body` | string | 纯文本正文（与 text 相同） |
 | `date` | string | 邮件日期，RFC3339 |
 | `syncedAt` | string | 同步时间，RFC3339 |
 | `flags` | string[] | IMAP 标记（如 `\Seen`、`\Flagged`） |

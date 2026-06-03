@@ -17,7 +17,6 @@ import (
 	_ "github.com/emersion/go-message/charset"
 	"github.com/emersion/go-message/mail"
 	"github.com/lipaysamart/mailhooks/internal/config"
-	"github.com/lipaysamart/mailhooks/internal/converter"
 	"github.com/lipaysamart/mailhooks/internal/model"
 	"github.com/lipaysamart/mailhooks/internal/queue"
 	"github.com/lipaysamart/mailhooks/internal/state"
@@ -87,10 +86,12 @@ func (s *Syncer) Sync(ctx context.Context) error {
 		return fmt.Errorf("connect: %w", err)
 	}
 	defer func() { _ = client.Close() }()
+	s.logger.Debug("imap connected", zap.String("account", s.cfg.Name))
 
 	if err := client.Login(s.cfg.Username, s.cfg.Password).Wait(); err != nil {
 		return fmt.Errorf("login: %w", err)
 	}
+	s.logger.Debug("imap login ok", zap.String("account", s.cfg.Name))
 
 	selectCmd := client.Select("INBOX", nil)
 	mailboxData, err := selectCmd.Wait()
@@ -99,6 +100,11 @@ func (s *Syncer) Sync(ctx context.Context) error {
 	}
 	uidValidity := mailboxData.UIDValidity
 	uidNext := mailboxData.UIDNext
+	s.logger.Debug("inbox selected",
+		zap.String("account", s.cfg.Name),
+		zap.Uint32("uid_validity", uidValidity),
+		zap.Uint32("uid_next", uint32(uidNext)),
+	)
 
 	if uidNext == 0 {
 		s.logger.Warn("uid_next is 0, skipping sync",
@@ -124,6 +130,11 @@ func (s *Syncer) Sync(ctx context.Context) error {
 	}
 
 	if uint32(uidNext) <= state.LastUID+1 {
+		s.logger.Debug("no new messages",
+			zap.String("account", s.cfg.Name),
+			zap.Uint32("uid_next", uint32(uidNext)),
+			zap.Uint32("last_uid", state.LastUID),
+		)
 		return nil
 	}
 
@@ -142,6 +153,7 @@ func (s *Syncer) Sync(ctx context.Context) error {
 
 	fetchCmd := client.Fetch(uidSet, fetchOptions)
 
+	newCount := 0
 	for {
 		msgData := fetchCmd.Next()
 		if msgData == nil {
@@ -161,6 +173,11 @@ func (s *Syncer) Sync(ctx context.Context) error {
 			continue
 		}
 		rawBody := msgBuf.BodySection[0].Bytes
+
+		s.logger.Debug("fetching message",
+			zap.String("account", s.cfg.Name),
+			zap.Uint32("uid", uint32(msgBuf.UID)),
+		)
 
 		email, parseErr := s.parseMIME(rawBody)
 		if parseErr != nil {
@@ -189,8 +206,15 @@ func (s *Syncer) Sync(ctx context.Context) error {
 			if msgBuf.UID > imap.UID(state.LastUID) {
 				state.LastUID = uint32(msgBuf.UID)
 			}
+			newCount++
 			continue
 		}
+
+		s.logger.Info("new message synced",
+			zap.String("account", s.cfg.Name),
+			zap.Uint32("uid", uint32(msgBuf.UID)),
+			zap.String("subject", email.Subject),
+		)
 
 		itemID := email.MessageID
 		if itemID == "" {
@@ -212,6 +236,7 @@ func (s *Syncer) Sync(ctx context.Context) error {
 		if msgBuf.UID > imap.UID(state.LastUID) {
 			state.LastUID = uint32(msgBuf.UID)
 		}
+		newCount++
 	}
 
 	if err := fetchCmd.Close(); err != nil {
@@ -222,6 +247,11 @@ func (s *Syncer) Sync(ctx context.Context) error {
 	if err := s.stateStore.Save(s.cfg.Name, state); err != nil {
 		return fmt.Errorf("save state: %w", err)
 	}
+	s.logger.Debug("sync complete",
+		zap.String("account", s.cfg.Name),
+		zap.Int("new_messages", newCount),
+		zap.Uint32("last_uid", state.LastUID),
+	)
 	return nil
 }
 
@@ -241,11 +271,6 @@ func (s *Syncer) parseMIME(raw []byte) (*model.Email, error) {
 	if to, err := header.AddressList("To"); err == nil {
 		for _, a := range to {
 			email.To = append(email.To, model.Address{Name: a.Name, Address: a.Address})
-		}
-	}
-	if cc, err := header.AddressList("Cc"); err == nil {
-		for _, a := range cc {
-			email.Cc = append(email.Cc, model.Address{Name: a.Name, Address: a.Address})
 		}
 	}
 	if d, err := header.Date(); err == nil {
@@ -277,10 +302,6 @@ func (s *Syncer) parseMIME(raw []byte) (*model.Email, error) {
 				email.TextBody = string(bodyBytes)
 			case strings.HasPrefix(mediaType, "text/html"):
 				email.HTMLBody = string(bodyBytes)
-				md, convErr := converter.HTMLToMarkdown(string(bodyBytes))
-				if convErr == nil {
-					email.MarkdownBody = md
-				}
 			}
 		case *mail.AttachmentHeader:
 			bodyBytes, readErr := io.ReadAll(part.Body)

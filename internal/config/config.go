@@ -21,7 +21,6 @@ type AccountConfig struct {
 	TLS                      bool   `yaml:"tls"`
 	Username                 string `yaml:"username"`
 	Password                 string `yaml:"password"`
-	Address                  string `yaml:"address"`
 	WebhookURL               string `yaml:"webhook_url"`
 	WebhookTimeout           string `yaml:"webhook_timeout"`
 	SyncInterval             string `yaml:"sync_interval"`
@@ -34,6 +33,7 @@ type QueueConfig struct {
 	RetryDelay      string `yaml:"retry_delay"`
 	ExpireAfter     string `yaml:"expire_after"`
 	CleanupInterval string `yaml:"cleanup_interval"`
+	DBPath          string `yaml:"db_path"`
 }
 
 type LogConfig struct {
@@ -48,7 +48,6 @@ type ResolvedAccountConfig struct {
 	TLS                      bool
 	Username                 string
 	Password                 string
-	Address                  string
 	WebhookURL               string
 	WebhookTimeout           time.Duration
 	SyncInterval             time.Duration
@@ -61,6 +60,7 @@ type ResolvedQueueConfig struct {
 	RetryDelay      time.Duration
 	ExpireAfter     time.Duration
 	CleanupInterval time.Duration
+	DBPath          string
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -93,6 +93,9 @@ func LoadConfig(path string) (*Config, error) {
 	if cfg.Queue.CleanupInterval == "" {
 		cfg.Queue.CleanupInterval = "5m"
 	}
+	if cfg.Queue.DBPath == "" {
+		cfg.Queue.DBPath = "data/queue.db"
+	}
 	for i := range cfg.Accounts {
 		if cfg.Accounts[i].Port == 0 {
 			if cfg.Accounts[i].TLS {
@@ -113,13 +116,29 @@ func LoadConfig(path string) (*Config, error) {
 
 func (c *AccountConfig) Resolve() (ResolvedAccountConfig, error) {
 	var r ResolvedAccountConfig
+
+	if c.Name == "" {
+		return r, fmt.Errorf("account name is required")
+	}
+	if c.Host == "" {
+		return r, fmt.Errorf("account %q: host is required", c.Name)
+	}
+	if c.Username == "" {
+		return r, fmt.Errorf("account %q: username is required", c.Name)
+	}
+	if c.Password == "" {
+		return r, fmt.Errorf("account %q: password is required", c.Name)
+	}
+	if c.WebhookURL == "" {
+		return r, fmt.Errorf("account %q: webhook_url is required", c.Name)
+	}
+
 	r.Name = c.Name
 	r.Host = c.Host
 	r.Port = c.Port
 	r.TLS = c.TLS
 	r.Username = c.Username
 	r.Password = c.Password
-	r.Address = c.Address
 	r.WebhookURL = c.WebhookURL
 	r.IncludeAttachmentContent = c.IncludeAttachmentContent
 
@@ -138,6 +157,7 @@ func (c *AccountConfig) Resolve() (ResolvedAccountConfig, error) {
 func (c *QueueConfig) Resolve() (ResolvedQueueConfig, error) {
 	var r ResolvedQueueConfig
 	r.MaxRetries = c.MaxRetries
+	r.DBPath = c.DBPath
 	var err error
 	r.PollInterval, err = time.ParseDuration(c.PollInterval)
 	if err != nil {
