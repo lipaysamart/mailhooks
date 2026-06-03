@@ -12,6 +12,7 @@ func New(level string, format string) (*zap.Logger, error) {
 	}
 	cfg := zap.NewProductionConfig()
 	cfg.Level = zap.NewAtomicLevelAt(lvl)
+	cfg.Sampling = nil // disable sampling: every log line matters for audit/debug
 	if format == "console" {
 		cfg.Encoding = "console"
 	}

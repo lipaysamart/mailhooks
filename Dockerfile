@@ -14,7 +14,5 @@ RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 COPY --from=builder /out/mailhooks /app/mailhooks
 
-EXPOSE 8080
-
 ENTRYPOINT ["/app/mailhooks"]
 CMD ["-config", "config.yaml"]

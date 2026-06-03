@@ -34,7 +34,10 @@ func main() {
 		log.Fatal("invalid queue config", zap.Error(err))
 	}
 
-	q := queue.New(queueCfg, log)
+	q, err := queue.New(queueCfg, log)
+	if err != nil {
+		log.Fatal("init queue", zap.Error(err))
+	}
 	stateStore := state.NewStore("data")
 
 	ctx, cancel := context.WithCancel(context.Background())
