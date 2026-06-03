@@ -164,7 +164,7 @@ func TestBuildPayloadEmptyFlags(t *testing.T) {
 
 	data, _ := json.Marshal(p)
 	var result map[string]interface{}
-	json.Unmarshal(data, &result)
+	_ = json.Unmarshal(data, &result)
 
 	// flags should be omitted when empty/nil
 	if _, ok := result["flags"]; ok {

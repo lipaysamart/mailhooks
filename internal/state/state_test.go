@@ -96,11 +96,15 @@ func TestOverwrite(t *testing.T) {
 
 	// First save
 	s1 := &model.AccountState{UIDValidity: 1, LastUID: 10}
-	store.Save("account", s1)
+	if err := store.Save("account", s1); err != nil {
+		t.Fatalf("first save: %v", err)
+	}
 
 	// Overwrite
 	s2 := &model.AccountState{UIDValidity: 2, LastUID: 20}
-	store.Save("account", s2)
+	if err := store.Save("account", s2); err != nil {
+		t.Fatalf("second save: %v", err)
+	}
 
 	loaded, _ := store.Load("account")
 	if loaded.UIDValidity != 2 || loaded.LastUID != 20 {

@@ -41,21 +41,21 @@ func New(cfg config.ResolvedQueueConfig, logger *zap.Logger) (*Queue, error) {
 	db.SetMaxOpenConns(1)
 
 	if err := migrateSchema(db); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("migrate queue schema: %w", err)
 	}
 
 	// P0: recover stuck in_flight items from previous crash; reset retry_count to 0
 	// so crash-recovered items get a clean retry slate
 	if _, err := db.Exec(`UPDATE queue_items SET status = 'pending', retry_count = 0 WHERE status = 'in_flight'`); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("recover in_flight items: %w", err)
 	}
 
 	// P1: clean expired items before consuming
 	if _, err := db.Exec(`DELETE FROM queue_items WHERE expire_at < ? AND status != 'in_flight'`,
 		time.Now().UTC().Format(time.RFC3339)); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("cleanup expired items: %w", err)
 	}
 
@@ -152,7 +152,7 @@ func (q *Queue) PopReady() []*model.QueueItem {
 		q.logger.Error("pop ready items", zap.Error(err))
 		return nil
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var items []*model.QueueItem
 	for rows.Next() {
