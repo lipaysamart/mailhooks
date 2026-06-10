@@ -1,0 +1,16 @@
+{
+  "name": "mailhooks",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "node --experimental-strip-types index.ts",
+    "dev:watch": "node --experimental-strip-types --watch index.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "imapflow": "^1.4.0"
+  }
+}
