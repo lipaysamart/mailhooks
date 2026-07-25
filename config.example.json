@@ -2,6 +2,7 @@
   "host": "imap.example.com",
   "port": 993,
   "secure": true,
+  "proxy": "",
   "username": "user@example.com",
   "password": "your-password",
   "signingSecret": "your-hmac-secret",
