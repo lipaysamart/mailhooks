@@ -34,37 +34,49 @@ export async function startWorker(
   signal: AbortSignal,
 ): Promise<void> {
   while (!signal.aborted) {
-    const job = dequeue(db);
+    try {
+      const job = dequeue(db);
 
-    if (!job) {
-      await sleep(5_000, signal);
-      continue;
-    }
+      if (!job) {
+        await sleep(5_000, signal);
+        continue;
+      }
 
-    const result = await sendWebhook(
-      job.webhook_url,
-      config.signingSecret,
-      job.payload,
-    );
-
-    if (result.ok) {
-      markDone(db, job.id);
-      console.log(
-        `[worker] Job ${job.id} → ${job.webhook_url} delivered (${result.status})`,
+      const result = await sendWebhook(
+        job.webhook_url,
+        config.signingSecret,
+        job.payload,
       );
-    } else {
-      const newAttempts = job.attempts + 1;
-      if (newAttempts >= MAX_RETRIES) {
-        markFailed(db, job.id);
-        console.error(
-          `[worker] Job ${job.id} failed after ${newAttempts} attempts, marking failed`,
+
+      if (result.ok) {
+        try {
+          markDone(db, job.id);
+        } catch (err) {
+          console.error(
+            `[worker] Job ${job.id} delivered but markDone failed:`,
+            err,
+          );
+        }
+        console.log(
+          `[worker] Job ${job.id} → ${job.webhook_url} delivered (${result.status})`,
         );
       } else {
-        scheduleRetry(db, job.id, newAttempts);
-        console.warn(
-          `[worker] Job ${job.id} failed (attempt ${newAttempts}/${MAX_RETRIES}), retrying later`,
-        );
+        const newAttempts = job.attempts + 1;
+        if (newAttempts > MAX_RETRIES) {
+          markFailed(db, job.id);
+          console.error(
+            `[worker] Job ${job.id} failed after ${newAttempts} attempts, marking failed`,
+          );
+        } else {
+          scheduleRetry(db, job.id, newAttempts);
+          console.warn(
+            `[worker] Job ${job.id} failed (attempt ${newAttempts}/${MAX_RETRIES}), retrying later`,
+          );
+        }
       }
+    } catch (err) {
+      console.error("[worker] Unexpected error:", err);
+      await sleep(5_000, signal);
     }
   }
 }

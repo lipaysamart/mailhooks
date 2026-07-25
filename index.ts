@@ -31,14 +31,22 @@ const interval = setInterval(async () => {
   }
 }, config.pollIntervalSeconds * 1000);
 
+let shuttingDown = false;
+
 async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
   console.log("Shutting down gracefully...");
   clearInterval(interval);
   abortController.abort();
-  await Promise.race([
-    workerPromise,
-    new Promise((resolve) => setTimeout(resolve, 2000)),
-  ]);
+  try {
+    await Promise.race([
+      workerPromise,
+      new Promise((resolve) => setTimeout(resolve, 2000)),
+    ]);
+  } catch (err) {
+    console.error("Worker exited with error:", err);
+  }
   closeDb(db);
   console.log("Shutdown complete");
   process.exit(0);

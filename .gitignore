@@ -40,3 +40,7 @@ config.json
 # ephemeral dev notes
 plan.md
 progress.md
+
+# SQLite database
+mailhooks.db
+mailhooks.db-*

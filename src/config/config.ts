@@ -63,10 +63,10 @@ export async function loadConfig(path: string): Promise<Config> {
     proxy: parsed.proxy as string | undefined,
     username: parsed.username as string,
     password: parsed.password as string,
-    mailbox: (parsed.mailbox as string) ?? "INBOX",
+    mailbox: (parsed.mailbox as string) || "INBOX",
     signingSecret,
-    pollIntervalSeconds: (parsed.pollIntervalSeconds as number) ?? 60,
-    dbPath: (parsed.dbPath as string) ?? "./mailhooks.db",
+    pollIntervalSeconds: (parsed.pollIntervalSeconds as number) || 60,
+    dbPath: (parsed.dbPath as string) || "./mailhooks.db",
     routes,
   };
 }

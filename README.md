@@ -84,13 +84,13 @@ docker compose up -d
 **Node.js 验证示例：**
 
 ```js
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 function verify(body, signature, secret) {
   const hmac = createHmac("sha256", secret);
   hmac.update(body, "utf-8");
   const expected = "sha256=" + hmac.digest("hex");
-  return crypto.timingSafeEqual(
+  return timingSafeEqual(
     Buffer.from(expected),
     Buffer.from(signature),
   );
@@ -100,7 +100,7 @@ function verify(body, signature, secret) {
 ## 重试策略
 
 - 每次投递失败后自动重试，最多 **5 次**（共 6 次投递尝试）
-- 使用指数退避延迟：60s → 120s → 240s → 480s
+- 使用指数退避延迟：60s → 120s → 240s → 480s → 960s
 - 超过重试上限后标记为 `failed`，不再投递
 
 ## 已知限制

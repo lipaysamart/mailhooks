@@ -5,3 +5,4 @@ config.json
 mailhooks.db
 mailhooks.db-*
 .pi-subagents
+.env*
