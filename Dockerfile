@@ -9,7 +9,8 @@ RUN npm ci --omit=dev
 FROM node:22-alpine
 WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
-COPY index.ts tsconfig.json ./
+COPY package.json index.ts tsconfig.json ./
 COPY src/ ./src/
+RUN mkdir -p /app/data && chown node:node /app/data
 USER node
 CMD ["node", "--experimental-strip-types", "index.ts"]
