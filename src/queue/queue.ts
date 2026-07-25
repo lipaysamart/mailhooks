@@ -26,7 +26,9 @@ export function dequeue(db: Database.Database): QueueJob | null {
 }
 
 export function markDone(db: Database.Database, id: number): void {
-  db.prepare(`UPDATE queue SET status = 'done', updated_at = @now WHERE id = @id`).run({
+  db.prepare(
+    `UPDATE queue SET status = 'done', updated_at = @now WHERE id = @id`,
+  ).run({
     id,
     now: Date.now(),
   });
@@ -39,14 +41,16 @@ export function scheduleRetry(
 ): void {
   const now = Date.now();
   const baseDelayMs = 60_000;
-  const delayMs = baseDelayMs * Math.pow(2, attempts - 1);
+  const delayMs = baseDelayMs * 2 ** (attempts - 1);
   db.prepare(
     `UPDATE queue SET status = 'pending', attempts = @attempts, next_retry_at = @next_retry_at, updated_at = @now WHERE id = @id`,
   ).run({ id, attempts, next_retry_at: now + delayMs, now });
 }
 
 export function markFailed(db: Database.Database, id: number): void {
-  db.prepare(`UPDATE queue SET status = 'failed', updated_at = @now WHERE id = @id`).run({
+  db.prepare(
+    `UPDATE queue SET status = 'failed', updated_at = @now WHERE id = @id`,
+  ).run({
     id,
     now: Date.now(),
   });

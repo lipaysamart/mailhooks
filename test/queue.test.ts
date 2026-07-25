@@ -1,12 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
-import { initDb, closeDb } from "../src/queue/db.ts";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { closeDb, initDb } from "../src/queue/db.ts";
 import {
-  enqueue,
   dequeue,
+  enqueue,
   markDone,
-  scheduleRetry,
   markFailed,
+  scheduleRetry,
 } from "../src/queue/queue.ts";
 
 let db: Database.Database;
@@ -21,16 +21,21 @@ afterEach(() => {
 
 describe("enqueue + dequeue", () => {
   it("inserts and retrieves a job with correct fields", () => {
-    enqueue(db, "alerts@example.com", "https://hooks.example.com/alerts", '{"test":true}');
+    enqueue(
+      db,
+      "alerts@example.com",
+      "https://hooks.example.com/alerts",
+      '{"test":true}',
+    );
 
     const job = dequeue(db);
     expect(job).not.toBeNull();
-    expect(job!.to_address).toBe("alerts@example.com");
-    expect(job!.webhook_url).toBe("https://hooks.example.com/alerts");
-    expect(job!.payload).toBe('{"test":true}');
-    expect(job!.status).toBe("pending");
-    expect(job!.attempts).toBe(0);
-    expect(job!.next_retry_at).toBeNull();
+    expect(job?.to_address).toBe("alerts@example.com");
+    expect(job?.webhook_url).toBe("https://hooks.example.com/alerts");
+    expect(job?.payload).toBe('{"test":true}');
+    expect(job?.status).toBe("pending");
+    expect(job?.attempts).toBe(0);
+    expect(job?.next_retry_at).toBeNull();
   });
 
   it("returns null on empty queue", () => {
@@ -76,7 +81,7 @@ describe("enqueue + dequeue", () => {
 
     const job = dequeue(db);
     expect(job).not.toBeNull();
-    expect(job!.to_address).toBe("a@e.com");
+    expect(job?.to_address).toBe("a@e.com");
   });
 });
 
@@ -89,9 +94,9 @@ describe("dequeue non-atomicity", () => {
 
     expect(job1).not.toBeNull();
     expect(job2).not.toBeNull();
-    expect(job1!.id).toBe(job2!.id);
+    expect(job1?.id).toBe(job2?.id);
     // Status should still be "pending" after dequeue
-    expect(job1!.status).toBe("pending");
+    expect(job1?.status).toBe("pending");
   });
 });
 
@@ -104,7 +109,9 @@ describe("markDone", () => {
     expect(dequeue(db)).toBeNull();
 
     // Verify status in DB
-    const row = db.prepare("SELECT status FROM queue WHERE id = ?").get(job.id) as {
+    const row = db
+      .prepare("SELECT status FROM queue WHERE id = ?")
+      .get(job.id) as {
       status: string;
     };
     expect(row.status).toBe("done");
@@ -120,9 +127,13 @@ describe("scheduleRetry", () => {
     scheduleRetry(db, job.id, 1);
     const after = Date.now();
 
-    const row = db.prepare(
-      "SELECT status, attempts, next_retry_at FROM queue WHERE id = ?",
-    ).get(job.id) as { status: string; attempts: number; next_retry_at: number };
+    const row = db
+      .prepare("SELECT status, attempts, next_retry_at FROM queue WHERE id = ?")
+      .get(job.id) as {
+      status: string;
+      attempts: number;
+      next_retry_at: number;
+    };
 
     expect(row.status).toBe("pending");
     expect(row.attempts).toBe(1);
@@ -136,7 +147,9 @@ describe("scheduleRetry", () => {
     const before = Date.now();
     scheduleRetry(db, job.id, 1);
 
-    const row = db.prepare("SELECT next_retry_at FROM queue WHERE id = ?").get(job.id) as {
+    const row = db
+      .prepare("SELECT next_retry_at FROM queue WHERE id = ?")
+      .get(job.id) as {
       next_retry_at: number;
     };
 
@@ -151,7 +164,9 @@ describe("scheduleRetry", () => {
     const before = Date.now();
     scheduleRetry(db, job.id, 2);
 
-    const row = db.prepare("SELECT next_retry_at FROM queue WHERE id = ?").get(job.id) as {
+    const row = db
+      .prepare("SELECT next_retry_at FROM queue WHERE id = ?")
+      .get(job.id) as {
       next_retry_at: number;
     };
 
@@ -166,7 +181,9 @@ describe("scheduleRetry", () => {
     const before = Date.now();
     scheduleRetry(db, job.id, 3);
 
-    const row = db.prepare("SELECT next_retry_at FROM queue WHERE id = ?").get(job.id) as {
+    const row = db
+      .prepare("SELECT next_retry_at FROM queue WHERE id = ?")
+      .get(job.id) as {
       next_retry_at: number;
     };
 
@@ -184,7 +201,9 @@ describe("markFailed", () => {
 
     expect(dequeue(db)).toBeNull();
 
-    const row = db.prepare("SELECT status FROM queue WHERE id = ?").get(job.id) as {
+    const row = db
+      .prepare("SELECT status FROM queue WHERE id = ?")
+      .get(job.id) as {
       status: string;
     };
     expect(row.status).toBe("failed");

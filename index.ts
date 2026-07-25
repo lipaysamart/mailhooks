@@ -1,9 +1,9 @@
 import { loadConfig } from "./src/config/config.ts";
-import { initDb, closeDb } from "./src/queue/db.ts";
 import { pollOnce } from "./src/poller/poller.ts";
+import { closeDb, initDb } from "./src/queue/db.ts";
 import { startWorker } from "./src/worker/worker.ts";
 
-const configPath = process.cwd() + "/config.json";
+const configPath = `${process.cwd()}/config.json`;
 const config = await loadConfig(configPath);
 
 const db = initDb(config.dbPath);

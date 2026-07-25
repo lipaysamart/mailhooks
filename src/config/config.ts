@@ -1,4 +1,4 @@
-import { readFile } from "fs/promises";
+import { readFile } from "node:fs/promises";
 import type { WebhookRoute } from "../types.ts";
 
 export interface Config {
@@ -44,12 +44,16 @@ export async function loadConfig(path: string): Promise<Config> {
 
   const routes = parsed.routes as WebhookRoute[] | undefined;
   if (!routes || !Array.isArray(routes) || routes.length === 0) {
-    throw new Error('Config validation failed: "routes" must be a non-empty array');
+    throw new Error(
+      'Config validation failed: "routes" must be a non-empty array',
+    );
   }
 
   const signingSecret = parsed.signingSecret;
   if (!signingSecret || typeof signingSecret !== "string") {
-    throw new Error('Config validation failed: "signingSecret" is required and must be a string');
+    throw new Error(
+      'Config validation failed: "signingSecret" is required and must be a string',
+    );
   }
 
   return {

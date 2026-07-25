@@ -1,5 +1,5 @@
-import type { EmailSummary } from "../types.ts";
 import type { ParsedMail } from "mailparser";
+import type { EmailSummary } from "../types.ts";
 
 export function buildPayload(
   mail: ParsedMail,

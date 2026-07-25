@@ -1,9 +1,10 @@
+import type Database from "better-sqlite3";
+import type { MailboxLockObject } from "imapflow";
+import type { ParsedMail } from "mailparser";
+import type { Config } from "../config/config.ts";
 import { connect } from "../connector/connect.ts";
 import { enqueue } from "../queue/queue.ts";
 import { buildPayload } from "../webhook/payload.ts";
-import type { Config } from "../config/config.ts";
-import type { ParsedMail } from "mailparser";
-import type Database from "better-sqlite3";
 
 async function parseMail(source: Buffer): Promise<ParsedMail> {
   const { simpleParser } = await import("mailparser");
@@ -17,7 +18,7 @@ export async function pollOnce(
   const client = await connect(config);
   const mailbox = config.mailbox;
 
-  let lock;
+  let lock: MailboxLockObject;
   try {
     lock = await client.getMailboxLock(mailbox);
   } catch (err) {
@@ -29,7 +30,10 @@ export async function pollOnce(
   let enqueued = 0;
 
   try {
-    const uids = (await client.search({ seen: false }, { uid: true })) as number[];
+    const uids = (await client.search(
+      { seen: false },
+      { uid: true },
+    )) as number[];
 
     for (const uid of uids) {
       try {
@@ -38,7 +42,9 @@ export async function pollOnce(
 
         const mail = await parseMail((msg as { source: Buffer }).source);
 
-        const toAddresses = extractAddresses(mail.to as { value?: Array<{ address: string }> } | undefined);
+        const toAddresses = extractAddresses(
+          mail.to as { value?: Array<{ address: string }> } | undefined,
+        );
         const matched = findMatchingRoute(toAddresses, config.routes);
 
         if (!matched) {
@@ -83,9 +89,7 @@ function findMatchingRoute(
   routes: Array<{ address: string; url: string }>,
 ): { address: string; url: string } | null {
   for (const addr of addresses) {
-    const route = routes.find(
-      (r) => r.address.toLowerCase() === addr,
-    );
+    const route = routes.find((r) => r.address.toLowerCase() === addr);
     if (route) return route;
   }
   return null;

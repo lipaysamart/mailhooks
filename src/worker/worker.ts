@@ -1,7 +1,12 @@
-import { dequeue, markDone, scheduleRetry, markFailed } from "../queue/queue.ts";
-import { sendWebhook } from "../webhook/sender.ts";
-import type { Config } from "../config/config.ts";
 import type Database from "better-sqlite3";
+import type { Config } from "../config/config.ts";
+import {
+  dequeue,
+  markDone,
+  markFailed,
+  scheduleRetry,
+} from "../queue/queue.ts";
+import { sendWebhook } from "../webhook/sender.ts";
 
 export const MAX_RETRIES = 5;
 

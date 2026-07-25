@@ -1,7 +1,7 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { mkdtemp, writeFile, rm } from "fs/promises";
-import { join } from "path";
-import { tmpdir } from "os";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config/config.ts";
 
 let tempDirs: string[] = [];
@@ -23,18 +23,25 @@ async function writeConfigFile(content: string): Promise<string> {
 
 describe("loadConfig", () => {
   it("loads a complete valid config", async () => {
-    const path = await writeConfigFile(JSON.stringify({
-      host: "imap.example.com",
-      port: 993,
-      secure: true,
-      username: "user@example.com",
-      password: "secret",
-      signingSecret: "hmac-secret",
-      mailbox: "INBOX",
-      pollIntervalSeconds: 60,
-      dbPath: "./mailhooks.db",
-      routes: [{ address: "alerts@example.com", url: "https://hooks.example.com/alerts" }],
-    }));
+    const path = await writeConfigFile(
+      JSON.stringify({
+        host: "imap.example.com",
+        port: 993,
+        secure: true,
+        username: "user@example.com",
+        password: "secret",
+        signingSecret: "hmac-secret",
+        mailbox: "INBOX",
+        pollIntervalSeconds: 60,
+        dbPath: "./mailhooks.db",
+        routes: [
+          {
+            address: "alerts@example.com",
+            url: "https://hooks.example.com/alerts",
+          },
+        ],
+      }),
+    );
 
     const config = await loadConfig(path);
     expect(config.host).toBe("imap.example.com");
@@ -47,19 +54,21 @@ describe("loadConfig", () => {
     expect(config.pollIntervalSeconds).toBe(60);
     expect(config.dbPath).toBe("./mailhooks.db");
     expect(config.routes).toHaveLength(1);
-    expect(config.routes[0]!.address).toBe("alerts@example.com");
+    expect(config.routes[0]?.address).toBe("alerts@example.com");
   });
 
   it("applies defaults for mailbox, pollIntervalSeconds, dbPath", async () => {
-    const path = await writeConfigFile(JSON.stringify({
-      host: "imap.example.com",
-      port: 993,
-      secure: true,
-      username: "user@example.com",
-      password: "secret",
-      signingSecret: "hmac-secret",
-      routes: [{ address: "a@e.com", url: "https://hooks.example.com" }],
-    }));
+    const path = await writeConfigFile(
+      JSON.stringify({
+        host: "imap.example.com",
+        port: 993,
+        secure: true,
+        username: "user@example.com",
+        password: "secret",
+        signingSecret: "hmac-secret",
+        routes: [{ address: "a@e.com", url: "https://hooks.example.com" }],
+      }),
+    );
 
     const config = await loadConfig(path);
     expect(config.mailbox).toBe("INBOX");
@@ -87,80 +96,80 @@ describe("loadConfig", () => {
   });
 
   it("throws when routes is an empty array", async () => {
-    const path = await writeConfigFile(JSON.stringify({
-      host: "imap.example.com",
-      port: 993,
-      secure: true,
-      username: "user@example.com",
-      password: "secret",
-      signingSecret: "hmac-secret",
-      routes: [],
-    }));
-
-    await expect(loadConfig(path)).rejects.toThrow(
-      /routes.*non-empty array/,
+    const path = await writeConfigFile(
+      JSON.stringify({
+        host: "imap.example.com",
+        port: 993,
+        secure: true,
+        username: "user@example.com",
+        password: "secret",
+        signingSecret: "hmac-secret",
+        routes: [],
+      }),
     );
+
+    await expect(loadConfig(path)).rejects.toThrow(/routes.*non-empty array/);
   });
 
   it("throws when routes is missing", async () => {
-    const path = await writeConfigFile(JSON.stringify({
-      host: "imap.example.com",
-      port: 993,
-      secure: true,
-      username: "user@example.com",
-      password: "secret",
-      signingSecret: "hmac-secret",
-    }));
-
-    await expect(loadConfig(path)).rejects.toThrow(
-      /routes.*non-empty array/,
+    const path = await writeConfigFile(
+      JSON.stringify({
+        host: "imap.example.com",
+        port: 993,
+        secure: true,
+        username: "user@example.com",
+        password: "secret",
+        signingSecret: "hmac-secret",
+      }),
     );
+
+    await expect(loadConfig(path)).rejects.toThrow(/routes.*non-empty array/);
   });
 
   it("throws when routes is a non-array string", async () => {
-    const path = await writeConfigFile(JSON.stringify({
-      host: "imap.example.com",
-      port: 993,
-      secure: true,
-      username: "user@example.com",
-      password: "secret",
-      signingSecret: "hmac-secret",
-      routes: "not-an-array",
-    }));
-
-    await expect(loadConfig(path)).rejects.toThrow(
-      /routes.*non-empty array/,
+    const path = await writeConfigFile(
+      JSON.stringify({
+        host: "imap.example.com",
+        port: 993,
+        secure: true,
+        username: "user@example.com",
+        password: "secret",
+        signingSecret: "hmac-secret",
+        routes: "not-an-array",
+      }),
     );
+
+    await expect(loadConfig(path)).rejects.toThrow(/routes.*non-empty array/);
   });
 
   it("throws when signingSecret is missing", async () => {
-    const path = await writeConfigFile(JSON.stringify({
-      host: "imap.example.com",
-      port: 993,
-      secure: true,
-      username: "user@example.com",
-      password: "secret",
-      routes: [{ address: "a@e.com", url: "https://hooks.example.com" }],
-    }));
-
-    await expect(loadConfig(path)).rejects.toThrow(
-      /signingSecret/,
+    const path = await writeConfigFile(
+      JSON.stringify({
+        host: "imap.example.com",
+        port: 993,
+        secure: true,
+        username: "user@example.com",
+        password: "secret",
+        routes: [{ address: "a@e.com", url: "https://hooks.example.com" }],
+      }),
     );
+
+    await expect(loadConfig(path)).rejects.toThrow(/signingSecret/);
   });
 
   it("throws when signingSecret is empty string", async () => {
-    const path = await writeConfigFile(JSON.stringify({
-      host: "imap.example.com",
-      port: 993,
-      secure: true,
-      username: "user@example.com",
-      password: "secret",
-      signingSecret: "",
-      routes: [{ address: "a@e.com", url: "https://hooks.example.com" }],
-    }));
-
-    await expect(loadConfig(path)).rejects.toThrow(
-      /signingSecret/,
+    const path = await writeConfigFile(
+      JSON.stringify({
+        host: "imap.example.com",
+        port: 993,
+        secure: true,
+        username: "user@example.com",
+        password: "secret",
+        signingSecret: "",
+        routes: [{ address: "a@e.com", url: "https://hooks.example.com" }],
+      }),
     );
+
+    await expect(loadConfig(path)).rejects.toThrow(/signingSecret/);
   });
 });
