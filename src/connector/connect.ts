@@ -8,6 +8,7 @@ export async function connect(config: Config) {
     secure: config.secure,
     proxy: config.proxy,
     logger: false,
+    disableAutoIdle: true,
     auth: {
       user: config.username,
       pass: config.password,

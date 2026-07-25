@@ -33,3 +33,10 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Finder (MacOS) folder config
 .DS_Store
 config.json
+
+# pi subagent artifacts
+.pi-subagents/
+
+# ephemeral dev notes
+plan.md
+progress.md
