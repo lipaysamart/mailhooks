@@ -1,19 +1,5 @@
 import type { EmailSummary } from "../types.ts";
-
-// mailparser ships without built-in types, declare minimal shape used here
-interface AddressObject {
-  text?: string;
-  value?: Array<{ address: string; name: string }>;
-}
-
-interface ParsedMail {
-  from?: AddressObject | null;
-  to?: AddressObject | null;
-  subject?: string;
-  text?: string;
-  html?: string | boolean;
-  date?: Date | string | null;
-}
+import type { ParsedMail } from "mailparser";
 
 export function buildPayload(
   mail: ParsedMail,

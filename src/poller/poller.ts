@@ -2,9 +2,10 @@ import { connect } from "../connector/connect.ts";
 import { enqueue } from "../queue/queue.ts";
 import { buildPayload } from "../webhook/payload.ts";
 import type { Config } from "../config/config.ts";
+import type { ParsedMail } from "mailparser";
 import type Database from "better-sqlite3";
 
-async function parseMail(source: Buffer): Promise<Record<string, unknown>> {
+async function parseMail(source: Buffer): Promise<ParsedMail> {
   const { simpleParser } = await import("mailparser");
   return simpleParser(source);
 }
