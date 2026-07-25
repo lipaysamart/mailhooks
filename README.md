@@ -14,15 +14,15 @@
 ### 前置条件
 
 - Node.js 22+（使用 `--experimental-strip-types` 直接运行 TS）
-- bun 包管理器
+- npm（随 Node.js 附带）
 
 ### 本地开发
 
 ```bash
-bun install
+npm install
 cp config.example.json config.json
 # 编辑 config.json，填入真实 IMAP 和 Webhook 配置
-bun run dev
+npm run dev
 ```
 
 ### 使用 Docker
@@ -114,7 +114,7 @@ function verify(body, signature, secret) {
 
 | 命令 | 说明 |
 |------|------|
-| `bun run dev` | 启动服务 |
-| `bun run dev:watch` | 启动服务（watch 模式） |
-| `bun run test` | 运行测试 |
-| `bunx tsc --noEmit` | 类型检查 |
+| `npm run dev` | 启动服务 |
+| `npm run dev:watch` | 启动服务（watch 模式） |
+| `npm test` | 运行测试 |
+| `npx tsc --noEmit` | 类型检查 |
