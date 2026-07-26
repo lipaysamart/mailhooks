@@ -1,120 +1,254 @@
 # mailhooks
 
-> 邮件转 Webhook 桥接服务
+**邮件 → Webhook 桥接服务** — 监听 IMAP 邮箱，将收到的邮件以签名 HTTP POST 转发到指定 URL。
 
-## 功能概览
+```
+┌──────────┐    IMAP     ┌──────────┐   enqueue    ┌──────────┐
+│  邮箱    │ ──────────→ │  Poller  │ ──────────→  │  SQLite  │
+│ (Gmail…) │             │ (解析+路由)│              │  (队列)   │
+└──────────┘             └──────────┘              └────┬─────┘
+                                                        │ dequeue
+                                                        ▼
+┌──────────┐   HTTP POST  ┌──────────┐   markDone   ┌──────────┐
+│ Webhook  │ ←─────────── │  Worker  │ ←─────────── │  Queue   │
+│  Server  │              │ (签名+发送)│              │  CRUD    │
+└──────────┘              └──────────┘              └──────────┘
+                                  ↑ retry (指数退避, max 5次)
+```
 
-- 通过 IMAP 轮询邮箱，按收件人地址匹配路由规则，将邮件转发到对应的 Webhook URL
-- 请求体为 JSON 格式的邮件摘要，附带 HMAC-SHA256 签名
-- SQLite 持久化队列，支持指数退避重试
-- 优雅关闭（SIGINT / SIGTERM）
+## 特性
+
+- **IMAP 轮询** — 定时拉取未读邮件，支持任意 IMAP 服务器
+- **路由匹配** — 按收件人地址匹配不同 Webhook URL
+- **签名投递** — HMAC-SHA256 签名，接收方可验证请求完整性
+- **持久化队列** — SQLite WAL 模式，崩溃恢复，不丢邮件
+- **指数退避** — 投递失败自动重试 5 次（60s → 120s → 240s → 480s → 960s）
+- **优雅关闭** — SIGINT/SIGTERM 信号处理，等待进行中的投递完成
 
 ## 快速开始
 
 ### 前置条件
 
-- Node.js 22+（使用 `--experimental-strip-types` 直接运行 TS）
-- npm（随 Node.js 附带）
+- **Node.js 22+**（使用 `--experimental-strip-types` 直接运行 TypeScript）
+- **npm**
 
-### 本地开发
+### 安装
 
 ```bash
+git clone https://github.com/lipaysamart/mailhooks.git
+cd mailhooks
 npm install
+```
+
+### 配置
+
+```bash
 cp config.example.json config.json
-# 编辑 config.json，填入真实 IMAP 和 Webhook 配置
+```
+
+编辑 `config.json`，填入真实配置：
+
+```json
+{
+  "host": "imap.gmail.com",
+  "port": 993,
+  "secure": true,
+  "username": "you@gmail.com",
+  "password": "your-app-password",
+  "signingSecret": "your-hmac-secret",
+  "routes": [
+    {
+      "address": "alerts@yourdomain.com",
+      "url": "https://hooks.example.com/alerts"
+    }
+  ]
+}
+```
+
+> 💡 Gmail 用户需使用 [App Password](https://myaccount.google.com/apppasswords)（需先开启两步验证）。
+
+### 启动
+
+```bash
 npm run dev
 ```
 
-### 使用 Docker
+### Docker 部署
 
 ```bash
-# 准备 config.json（注意：dbPath 需设为 ./data/mailhooks.db 以持久化队列数据）
+# 注意：config.json 中需设置 "dbPath": "./data/mailhooks.db" 以持久化队列数据
 docker compose up -d
 ```
 
-## 配置说明
+## 配置参考
 
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| `host` | `string` | 是 | — | IMAP 服务器地址 |
-| `port` | `number` | 是 | — | IMAP 端口 |
-| `secure` | `boolean` | 是 | — | 是否启用 TLS |
-| `proxy` | `string` | 否 | — | SOCKS 代理地址 |
-| `username` | `string` | 是 | — | IMAP 登录用户名 |
-| `password` | `string` | 是 | — | IMAP 登录密码 |
-| `signingSecret` | `string` | 是 | — | Webhook 请求 HMAC 签名密钥 |
-| `mailbox` | `string` | 否 | `INBOX` | 监听的邮箱文件夹 |
-| `pollIntervalSeconds` | `number` | 否 | `60` | 轮询间隔（秒） |
-| `dbPath` | `string` | 否 | `./mailhooks.db` | SQLite 数据库路径 |
-| `routes` | `array` | 是 | — | 路由规则数组 |
+|------|------|:----:|--------|------|
+| `host` | `string` | ✅ | — | IMAP 服务器地址 |
+| `port` | `number` | ✅ | — | IMAP 端口（通常 993） |
+| `secure` | `boolean` | ✅ | — | 是否启用 TLS |
+| `username` | `string` | ✅ | — | IMAP 用户名 |
+| `password` | `string` | ✅ | — | IMAP 密码 |
+| `signingSecret` | `string` | ✅ | — | HMAC-SHA256 签名密钥 |
+| `routes` | `array` | ✅ | — | 路由规则数组（见下表） |
+| `proxy` | `string` | — | — | SOCKS 代理（如 `socks5://127.0.0.1:1080`） |
+| `mailbox` | `string` | — | `INBOX` | 监听文件夹 |
+| `pollIntervalSeconds` | `number` | — | `60` | 轮询间隔（秒） |
+| `dbPath` | `string` | — | `./mailhooks.db` | SQLite 数据库路径 |
 
 **routes 子项：**
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `address` | `string` | 匹配的收件人地址（小写化比较） |
+| `address` | `string` | 匹配的收件人地址（不区分大小写） |
 | `url` | `string` | 转发目标 Webhook URL |
 
 ## Webhook 格式
 
-收到邮件后，服务会向匹配的 Webhook URL 发送 HTTP POST 请求：
+邮件到达后，服务向匹配的 URL 发送 `POST` 请求：
 
-- **Method**: `POST`
-- **Content-Type**: `application/json`
-- **Header**: `X-Mailhooks-Signature: sha256=<hex>`
-- **Timeout**: 10 秒
-
-**请求体结构**（`EmailSummary`）：
+```
+POST /your-webhook HTTP/1.1
+Content-Type: application/json
+X-Mailhooks-Signature: sha256=a1b2c3d4...
+```
 
 ```json
 {
   "from": "sender@example.com",
-  "to": "alerts@example.com",
-  "subject": "邮件主题",
-  "text_body": "纯文本内容",
-  "html_body": "<p>HTML 内容</p>",
-  "received_at": "2025-01-01T00:00:00.000Z"
+  "to": "alerts@yourdomain.com",
+  "subject": "服务器告警",
+  "text_body": "CPU 使用率超过 90%",
+  "html_body": "<p>CPU 使用率超过 90%</p>",
+  "received_at": "2025-01-15T08:30:00.000Z"
 }
 ```
 
+| 字段 | 说明 |
+|------|------|
+| `from` | 发件人地址 |
+| `to` | 匹配到的收件人地址 |
+| `subject` | 邮件主题 |
+| `text_body` | 纯文本正文 |
+| `html_body` | HTML 正文（无 HTML 时为 `null`） |
+| `received_at` | 收件时间（ISO 8601） |
+
 ## 签名验证
 
-签名使用 HMAC-SHA256 算法，对请求体原始字节计算，结果以 `sha256=<hex>` 格式放入 `X-Mailhooks-Signature` header。
+接收方应验证 `X-Mailhooks-Signature` 以确保请求来源可信、内容未被篡改。
 
-**Node.js 验证示例：**
+签名算法：`HMAC-SHA256(secret, requestBody)` → `sha256=<hex>`
+
+<details>
+<summary><strong>Node.js 验证示例</strong></summary>
 
 ```js
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-function verify(body, signature, secret) {
+function verifyWebhookSignature(body, signature, secret) {
+  if (!signature?.startsWith("sha256=")) return false;
+
   const hmac = createHmac("sha256", secret);
   hmac.update(body, "utf-8");
   const expected = "sha256=" + hmac.digest("hex");
-  return timingSafeEqual(
-    Buffer.from(expected),
-    Buffer.from(signature),
-  );
+
+  try {
+    return timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+  } catch {
+    return false; // 长度不匹配时 timingSafeEqual 会抛异常
+  }
 }
+
+// Express 示例
+app.post("/webhook", express.raw({ type: "*/*" }), (req, res) => {
+  const sig = req.headers["x-mailhooks-signature"];
+  if (!verifyWebhookSignature(req.body, sig, process.env.SIGNING_SECRET)) {
+    return res.status(401).json({ error: "Invalid signature" });
+  }
+  const payload = JSON.parse(req.body);
+  // 处理邮件...
+  res.json({ ok: true });
+});
 ```
+
+</details>
+
+<details>
+<summary><strong>Python 验证示例</strong></summary>
+
+```python
+import hashlib, hmac, json
+from flask import Flask, request
+
+app = Flask(__name__)
+SECRET = "your-hmac-secret"
+
+def verify_signature(body: bytes, signature: str) -> bool:
+    if not signature.startswith("sha256="):
+        return False
+    expected = "sha256=" + hmac.new(SECRET.encode(), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+@app.post("/webhook")
+def webhook():
+    sig = request.headers.get("X-Mailhooks-Signature", "")
+    if not verify_signature(request.data, sig):
+        return {"error": "Invalid signature"}, 401
+    payload = json.loads(request.data)
+    # 处理邮件...
+    return {"ok": True}
+```
+
+</details>
 
 ## 重试策略
 
-- 每次投递失败后自动重试，最多 **5 次**（共 6 次投递尝试）
-- 使用指数退避延迟：60s → 120s → 240s → 480s → 960s
-- 超过重试上限后标记为 `failed`，不再投递
+投递失败后自动重试，采用指数退避：
 
-## 已知限制
+| 尝试次数 | 延迟 | 累计等待 |
+|:--------:|:----:|:--------:|
+| 1（初始） | — | — |
+| 2 | 60s | 1 分钟 |
+| 3 | 120s | 3 分钟 |
+| 4 | 240s | 7 分钟 |
+| 5 | 480s | 15 分钟 |
+| 6 | 960s | 31 分钟 |
 
-- 单 worker 串行消费，无并发投递
-- 路由仅精确匹配 `To` header 地址（小写化后比较），不支持通配符或 `BCC` / `Delivered-To`
-- 无邮件去重机制（enqueue 与标记已读之间的崩溃可能导致重复投递）
-- 每次轮询新建 IMAP 连接，无连接复用或 IDLE 推送
+超过 6 次尝试后标记为 `failed`，不再投递。
 
 ## 开发
 
-| 命令 | 说明 |
+```bash
+# 安装依赖
+npm install
+
+# 启动（watch 模式）
+npm run dev:watch
+
+# 测试
+npm test
+
+# 类型检查
+npx tsc --noEmit
+
+# 代码检查
+npm run lint
+npm run format
+```
+
+## 技术栈
+
+| 组件 | 技术 |
 |------|------|
-| `npm run dev` | 启动服务 |
-| `npm run dev:watch` | 启动服务（watch 模式） |
-| `npm test` | 运行测试 |
-| `npx tsc --noEmit` | 类型检查 |
+| 运行时 | Node.js 22+ (`--experimental-strip-types`) |
+| 语言 | TypeScript 5 (strict, ESM) |
+| IMAP | [imapflow](https://imapflow.com/) |
+| 邮件解析 | [mailparser](https://nodemailer.com/extras/mailparser/) |
+| 队列存储 | SQLite (better-sqlite3, WAL 模式) |
+| 测试 | vitest |
+| 代码规范 | biome |
+| 容器化 | Docker (multi-stage build) |
+
+## License
+
+MIT
