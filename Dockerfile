@@ -1,18 +1,16 @@
-# syntax=docker/dockerfile:1
-FROM golang:1.25-alpine AS builder
-
-WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 go build -o /out/mailhooks ./cmd/mailhooks/
-
-FROM alpine:3.21
-
-RUN apk add --no-cache ca-certificates tzdata
-
+# Build stage: install production dependencies
+FROM node:22-alpine AS build
+RUN apk add --no-cache python3 make g++
 WORKDIR /app
-COPY --from=builder /out/mailhooks /app/mailhooks
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
-ENTRYPOINT ["/app/mailhooks"]
-CMD ["-config", "config.yaml"]
+# Runtime stage
+FROM node:22-alpine
+WORKDIR /app
+COPY --from=build /app/node_modules ./node_modules
+COPY package.json index.ts tsconfig.json ./
+COPY src/ ./src/
+RUN mkdir -p /app/data && chown node:node /app/data
+USER node
+CMD ["node", "--experimental-strip-types", "index.ts"]

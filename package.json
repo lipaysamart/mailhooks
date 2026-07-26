@@ -1,0 +1,24 @@
+{
+  "name": "mailhooks",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "node --experimental-strip-types index.ts",
+    "dev:watch": "node --experimental-strip-types --watch index.ts",
+    "test": "vitest run",
+    "lint": "biome check src/ index.ts test/",
+    "format": "biome format --write src/ index.ts test/"
+  },
+  "dependencies": {
+    "imapflow": "^1.4.0",
+    "better-sqlite3": "^11.9.1",
+    "mailparser": "^3.7.2"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.5",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.9.2",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
+  }
+}

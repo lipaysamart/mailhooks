@@ -1,0 +1,13 @@
+services:
+  mailhooks:
+    build: .
+    volumes:
+      - ./config.json:/app/config.json:ro
+      - mailhooks-data:/app/data
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
+    # 注意：config.json 中需设置 "dbPath": "./data/mailhooks.db" 以持久化队列数据
+
+volumes:
+  mailhooks-data:

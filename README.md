@@ -1,245 +1,254 @@
 # mailhooks
 
-[![CI](https://github.com/lipaysamart/mailhooks/actions/workflows/ci.yml/badge.svg)](https://github.com/lipaysamart/mailhooks/actions/workflows/ci.yml)
+**邮件 → Webhook 桥接服务** — 监听 IMAP 邮箱，将收到的邮件以签名 HTTP POST 转发到指定 URL。
 
-mailhooks 把 IMAP 邮箱的新邮件转到 Webhook。定时拉取 INBOX，解析后 POST 到你指定的 URL。多账户、自动重试、断点续传都内置了。
+```
+┌──────────┐    IMAP     ┌──────────┐   enqueue    ┌──────────┐
+│  邮箱    │ ──────────→ │  Poller  │ ──────────→  │  SQLite  │
+│ (Gmail…) │             │ (解析+路由)│              │  (队列)   │
+└──────────┘             └──────────┘              └────┬─────┘
+                                                        │ dequeue
+                                                        ▼
+┌──────────┐   HTTP POST  ┌──────────┐   markDone   ┌──────────┐
+│ Webhook  │ ←─────────── │  Worker  │ ←─────────── │  Queue   │
+│  Server  │              │ (签名+发送)│              │  CRUD    │
+└──────────┘              └──────────┘              └──────────┘
+                                  ↑ retry (指数退避, max 5次)
+```
 
-## 能做什么
+## 特性
 
-- **多账户** — 同时监听多个邮箱，各跑各的，互不阻塞
-- **增量同步** — 只拉上次之后的新邮件，靠 IMAP UID 判断，不会重复处理
-- **初始同步跳过** — 首次启动或 UIDValidity 变了不推 Webhook，免得历史邮件轰炸
-- **附件** — 提取文件名、MIME 类型、大小，可以选择把内容 Base64 编码塞进去
-- **指数退避重试** — Webhook 失败自动重试，指数退避 + 随机抖动，不会扎堆重试
-- **过期清理** — 超时的队列项自动丢掉
-- **进度持久化** — 同步进度存 JSON 文件，崩了重启接着来（原子写入）
-- **队列持久化** — SQLite 存储队列，重启不丢消息
-- **结构化日志** — 用 [zap](https://github.com/uber-go/zap)，console 和 JSON 两种格式
-- **静态二进制** — GoReleaser 打 `CGO_ENABLED=0` 的纯静态包，Linux / macOS 都行（amd64 / arm64）
+- **IMAP 轮询** — 定时拉取未读邮件，支持任意 IMAP 服务器
+- **路由匹配** — 按收件人地址匹配不同 Webhook URL
+- **签名投递** — HMAC-SHA256 签名，接收方可验证请求完整性
+- **持久化队列** — SQLite WAL 模式，崩溃恢复，不丢邮件
+- **指数退避** — 投递失败自动重试 5 次（60s → 120s → 240s → 480s → 960s）
+- **优雅关闭** — SIGINT/SIGTERM 信号处理，等待进行中的投递完成
 
 ## 快速开始
 
-### 1. 准备配置文件
+### 前置条件
 
-把示例配置复制一份，填上你的 IMAP 账户信息：
+- **Node.js 22+**（使用 `--experimental-strip-types` 直接运行 TypeScript）
+- **npm**
 
-```bash
-cp config.example.yaml mailhooks.yaml
-```
-
-编辑 `mailhooks.yaml`，至少填一个账户的 `host`、`username`、`password` 和 `webhook_url`。
-
-### 2. 运行
-
-#### 用 Go 安装（需要 Go 1.25+）
-
-```bash
-go install github.com/lipaysamart/mailhooks/cmd/mailhooks@latest
-mailhooks -config mailhooks.yaml
-```
-
-#### 下载预编译二进制
-
-从 [Releases](https://github.com/lipaysamart/mailhooks/releases) 页面下载：
-
-```bash
-# macOS arm64 (Apple Silicon)
-tar xzf mailhooks_Darwin_aarch64.tar.gz
-./mailhooks -config mailhooks.yaml
-
-# Linux amd64
-tar xzf mailhooks_Linux_x86_64.tar.gz
-./mailhooks -config mailhooks.yaml
-```
-
-#### 从源码构建
+### 安装
 
 ```bash
 git clone https://github.com/lipaysamart/mailhooks.git
 cd mailhooks
-go build -o mailhooks ./cmd/mailhooks/
-./mailhooks -config mailhooks.yaml
+npm install
 ```
 
-### 3. 用 Docker 跑
-
-确保当前目录有 `config.yaml` 配置文件，然后：
+### 配置
 
 ```bash
-# 拉取镜像并启动（后台）
-docker compose up -d
-
-# 查看日志
-docker compose logs -f
-
-# 停止
-docker compose down
+cp config.example.json config.json
 ```
 
-也可以直接跑：
-
-```bash
-docker run -d --name mailhooks \
-  -v $(pwd)/config.yaml:/app/config.yaml:ro \
-  -v $(pwd)/data:/app/data \
-  ghcr.io/lipaysamart/mailhooks:latest
-```
-
-### 4. 命令行参数
-
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `-config` | `mailhooks.yaml` | 配置文件路径 |
-
-## 配置说明
-
-完整的配置文件：
-
-```yaml
-# 账户列表，每个账户独立同步
-accounts:
-  - name: "personal"                # 账户标识（用于状态文件名）
-    host: "imap.example.com"        # IMAP 服务器地址
-    port: 993                       # 端口（TLS 默认 993，非 TLS 默认 143）
-    tls: true                       # 是否启用 TLS
-    username: "user@example.com"    # 登录用户名
-    password: "your-password"       # 登录密码
-    webhook_url: "https://hooks.example.com/email"  # Webhook 接收 URL
-    webhook_timeout: "30s"          # Webhook 请求超时（默认 30s）
-    sync_interval: "60s"            # IMAP 同步间隔（默认 60s）
-    include_attachment_content: false  # 是否在 payload 中包含附件 Base64 内容
-
-# 队列配置，控制投递和重试
-queue:
-  poll_interval: "5s"      # 消费循环轮询间隔（默认 5s）
-  max_retries: 3           # 最大重试次数（默认 3）
-  retry_delay: "30s"       # 重试基础延迟 — 退避公式: delay × 2^(n-1) ± 25% jitter（默认 30s）
-  expire_after: "24h"      # 队列项过期时间，超时丢弃（默认 24h）
-  cleanup_interval: "5m"   # 过期清理间隔（默认 5m）
-  db_path: "data/queue.db" # SQLite 数据库路径（默认 data/queue.db）
-
-# 日志
-log:
-  level: "info"            # debug / info / warn / error（默认 info）
-  format: "console"        # console（文本）/ json（默认 console，留空则 production JSON）
-```
-
-### 默认值速查
-
-| 字段 | 默认值 |
-|------|--------|
-| `accounts[].port` | 993（TLS 时）/ 143（非 TLS 时） |
-| `accounts[].webhook_timeout` | `30s` |
-| `accounts[].sync_interval` | `60s` |
-| `queue.poll_interval` | `5s` |
-| `queue.max_retries` | `3` |
-| `queue.retry_delay` | `30s` |
-| `queue.expire_after` | `24h` |
-| `queue.cleanup_interval` | `5m` |
-| `queue.db_path` | `data/queue.db` |
-| `log.level` | `info` |
-| `log.format` | `console` |
-
-## 代码结构
-
-```text
-cmd/mailhooks/main.go          — 程序入口，组装所有组件并启动 goroutine
-internal/config/config.go      — YAML 配置解析、默认值填充、Duration 校验
-internal/syncer/syncer.go      — IMAP 连接、UID 增量查询、MIME 解析、入队
-internal/queue/queue.go        — SQLite 持久化队列、Push/PopReady/MarkDone/MarkFailed、指数退避
-internal/webhook/webhook.go    — JSON payload 序列化、HTTP POST 发送
-internal/state/state.go        — JSON 文件状态持久化（原子写入）
-internal/model/model.go        — 领域数据结构定义
-internal/logger/logger.go      — zap 日志初始化
-```
-
-### 启动流程
-
-1. `LoadConfig` → 解析 YAML
-2. `logger.New` → 初始化日志
-3. `queue.New` → 打开 SQLite 队列
-4. `state.NewStore("data")` → 创建状态存储
-5. 遍历每个账户：
-   - `syncer.New(...)` → 创建同步器
-   - `go s.Run(ctx)` → 启动同步循环
-6. `go q.Consume(ctx)` → 启动队列消费
-7. `go q.CleanupLoop(ctx)` → 启动过期清理
-8. 等待 `SIGINT` / `SIGTERM` → 关闭
-
-## 数据流
-
-```text
-IMAP Server ──raw MIME──► Syncer (per-account goroutine)
-                               │ parseMIME()
-                               ▼
-                          Queue (SQLite, 单连接)
-                          Push()
-                               │
-                    Consume() ticker (poll_interval)
-                               ▼
-                          Webhook Send() ──HTTP POST──► 目标 URL
-                               │
-                        success → MarkDone()  (DELETE)
-                        fail    → MarkFailed() (backoff + re-enqueue)
-```
-
-### 状态持久化
-
-- 每次同步完，每个账户的 `UIDValidity` 和 `LastUID` 存到 `data/{account_name}.json`
-- 重启后自动接着来，只拉上次 UID 之后的新邮件
-- UIDValidity 变了（邮箱重建/迁移），会全量重同步但不推 Webhook
-- 文件写入用 `tmp + rename` 原子方式，不会写出半截损坏文件
-
-## Webhook Payload
-
-往 `webhook_url` 发 `POST`，`Content-Type: application/json`：
+编辑 `config.json`，填入真实配置：
 
 ```json
 {
-  "id": "<message-id>",
-  "accountName": "personal",
-  "folder": "INBOX",
-  "from": {
-    "name": "张三",
-    "address": "zhangsan@example.com"
-  },
-  "to": ["recipient@example.com"],
-  "subject": "邮件主题",
-  "text": "纯文本正文内容",
-  "body": "纯文本正文内容",
-  "date": "2026-06-01T12:00:00Z",
-  "syncedAt": "2026-06-01T12:01:30Z",
-  "flags": ["\\Seen"],
-  "attachments": [
+  "host": "imap.gmail.com",
+  "port": 993,
+  "secure": true,
+  "username": "you@gmail.com",
+  "password": "your-app-password",
+  "signingSecret": "your-hmac-secret",
+  "routes": [
     {
-      "filename": "report.pdf",
-      "contentType": "application/pdf",
-      "size": 1048576
+      "address": "alerts@yourdomain.com",
+      "url": "https://hooks.example.com/alerts"
     }
   ]
 }
 ```
 
-### 字段说明
+> 💡 Gmail 用户需使用 [App Password](https://myaccount.google.com/apppasswords)（需先开启两步验证）。
+
+### 启动
+
+```bash
+npm run dev
+```
+
+### Docker 部署
+
+```bash
+# 注意：config.json 中需设置 "dbPath": "./data/mailhooks.db" 以持久化队列数据
+docker compose up -d
+```
+
+## 配置参考
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|:----:|--------|------|
+| `host` | `string` | ✅ | — | IMAP 服务器地址 |
+| `port` | `number` | ✅ | — | IMAP 端口（通常 993） |
+| `secure` | `boolean` | ✅ | — | 是否启用 TLS |
+| `username` | `string` | ✅ | — | IMAP 用户名 |
+| `password` | `string` | ✅ | — | IMAP 密码 |
+| `signingSecret` | `string` | ✅ | — | HMAC-SHA256 签名密钥 |
+| `routes` | `array` | ✅ | — | 路由规则数组（见下表） |
+| `proxy` | `string` | — | — | SOCKS 代理（如 `socks5://127.0.0.1:1080`） |
+| `mailbox` | `string` | — | `INBOX` | 监听文件夹 |
+| `pollIntervalSeconds` | `number` | — | `60` | 轮询间隔（秒） |
+| `dbPath` | `string` | — | `./mailhooks.db` | SQLite 数据库路径 |
+
+**routes 子项：**
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | string | Message-ID |
-| `accountName` | string | 来源账户名，对应配置里的 `name` |
-| `folder` | string | 邮箱文件夹，固定 `"INBOX"` |
-| `from` | object | 发件人（`name` + `address`） |
-| `to` | string[] | 收件人地址列表 |
-| `subject` | string | 邮件主题 |
-| `text` | string | 纯文本正文 |
-| `body` | string | 纯文本正文（与 text 相同） |
-| `date` | string | 邮件日期，RFC3339 |
-| `syncedAt` | string | 同步时间，RFC3339 |
-| `flags` | string[] | IMAP 标记（如 `\Seen`、`\Flagged`） |
-| `attachments[]` | array | 附件列表（不含内容，除非开了 `include_attachment_content`） |
-| `attachments[].filename` | string | 文件名 |
-| `attachments[].contentType` | string | MIME 类型 |
-| `attachments[].size` | int | 文件大小（字节） |
+| `address` | `string` | 匹配的收件人地址（不区分大小写） |
+| `url` | `string` | 转发目标 Webhook URL |
 
-## 许可证
+## Webhook 格式
 
-[MIT](LICENSE)
+邮件到达后，服务向匹配的 URL 发送 `POST` 请求：
+
+```
+POST /your-webhook HTTP/1.1
+Content-Type: application/json
+X-Mailhooks-Signature: sha256=a1b2c3d4...
+```
+
+```json
+{
+  "from": "sender@example.com",
+  "to": "alerts@yourdomain.com",
+  "subject": "服务器告警",
+  "text_body": "CPU 使用率超过 90%",
+  "html_body": "<p>CPU 使用率超过 90%</p>",
+  "received_at": "2025-01-15T08:30:00.000Z"
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `from` | 发件人地址 |
+| `to` | 匹配到的收件人地址 |
+| `subject` | 邮件主题 |
+| `text_body` | 纯文本正文 |
+| `html_body` | HTML 正文（无 HTML 时为 `null`） |
+| `received_at` | 收件时间（ISO 8601） |
+
+## 签名验证
+
+接收方应验证 `X-Mailhooks-Signature` 以确保请求来源可信、内容未被篡改。
+
+签名算法：`HMAC-SHA256(secret, requestBody)` → `sha256=<hex>`
+
+<details>
+<summary><strong>Node.js 验证示例</strong></summary>
+
+```js
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+function verifyWebhookSignature(body, signature, secret) {
+  if (!signature?.startsWith("sha256=")) return false;
+
+  const hmac = createHmac("sha256", secret);
+  hmac.update(body, "utf-8");
+  const expected = "sha256=" + hmac.digest("hex");
+
+  try {
+    return timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+  } catch {
+    return false; // 长度不匹配时 timingSafeEqual 会抛异常
+  }
+}
+
+// Express 示例
+app.post("/webhook", express.raw({ type: "*/*" }), (req, res) => {
+  const sig = req.headers["x-mailhooks-signature"];
+  if (!verifyWebhookSignature(req.body, sig, process.env.SIGNING_SECRET)) {
+    return res.status(401).json({ error: "Invalid signature" });
+  }
+  const payload = JSON.parse(req.body);
+  // 处理邮件...
+  res.json({ ok: true });
+});
+```
+
+</details>
+
+<details>
+<summary><strong>Python 验证示例</strong></summary>
+
+```python
+import hashlib, hmac, json
+from flask import Flask, request
+
+app = Flask(__name__)
+SECRET = "your-hmac-secret"
+
+def verify_signature(body: bytes, signature: str) -> bool:
+    if not signature.startswith("sha256="):
+        return False
+    expected = "sha256=" + hmac.new(SECRET.encode(), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+@app.post("/webhook")
+def webhook():
+    sig = request.headers.get("X-Mailhooks-Signature", "")
+    if not verify_signature(request.data, sig):
+        return {"error": "Invalid signature"}, 401
+    payload = json.loads(request.data)
+    # 处理邮件...
+    return {"ok": True}
+```
+
+</details>
+
+## 重试策略
+
+投递失败后自动重试，采用指数退避：
+
+| 尝试次数 | 延迟 | 累计等待 |
+|:--------:|:----:|:--------:|
+| 1（初始） | — | — |
+| 2 | 60s | 1 分钟 |
+| 3 | 120s | 3 分钟 |
+| 4 | 240s | 7 分钟 |
+| 5 | 480s | 15 分钟 |
+| 6 | 960s | 31 分钟 |
+
+超过 6 次尝试后标记为 `failed`，不再投递。
+
+## 开发
+
+```bash
+# 安装依赖
+npm install
+
+# 启动（watch 模式）
+npm run dev:watch
+
+# 测试
+npm test
+
+# 类型检查
+npx tsc --noEmit
+
+# 代码检查
+npm run lint
+npm run format
+```
+
+## 技术栈
+
+| 组件 | 技术 |
+|------|------|
+| 运行时 | Node.js 22+ (`--experimental-strip-types`) |
+| 语言 | TypeScript 5 (strict, ESM) |
+| IMAP | [imapflow](https://imapflow.com/) |
+| 邮件解析 | [mailparser](https://nodemailer.com/extras/mailparser/) |
+| 队列存储 | SQLite (better-sqlite3, WAL 模式) |
+| 测试 | vitest |
+| 代码规范 | biome |
+| 容器化 | Docker (multi-stage build) |
+
+## License
+
+MIT
