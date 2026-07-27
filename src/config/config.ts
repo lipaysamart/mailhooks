@@ -9,7 +9,6 @@ export interface Config {
   username: string;
   password: string;
   mailbox: string;
-  signingSecret: string;
   pollIntervalSeconds: number;
   dbPath: string;
   routes: WebhookRoute[];
@@ -49,13 +48,6 @@ export async function loadConfig(path: string): Promise<Config> {
     );
   }
 
-  const signingSecret = parsed.signingSecret;
-  if (!signingSecret || typeof signingSecret !== "string") {
-    throw new Error(
-      'Config validation failed: "signingSecret" is required and must be a string',
-    );
-  }
-
   return {
     host: parsed.host as string,
     port: parsed.port as number,
@@ -64,7 +56,6 @@ export async function loadConfig(path: string): Promise<Config> {
     username: parsed.username as string,
     password: parsed.password as string,
     mailbox: (parsed.mailbox as string) || "INBOX",
-    signingSecret,
     pollIntervalSeconds: (parsed.pollIntervalSeconds as number) || 60,
     dbPath: (parsed.dbPath as string) || "./mailhooks.db",
     routes,

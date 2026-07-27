@@ -1,6 +1,6 @@
 # mailhooks
 
-**邮件 → Webhook 桥接服务** — 监听 IMAP 邮箱，将收到的邮件以签名 HTTP POST 转发到指定 URL。
+**邮件 → Webhook 桥接服务** — 监听 IMAP 邮箱，将收到的邮件以 HTTP POST 转发到指定 URL。
 
 ```
 ┌──────────┐    IMAP     ┌──────────┐   enqueue    ┌──────────┐
@@ -11,7 +11,7 @@
                                                         ▼
 ┌──────────┐   HTTP POST  ┌──────────┐   markDone   ┌──────────┐
 │ Webhook  │ ←─────────── │  Worker  │ ←─────────── │  Queue   │
-│  Server  │              │ (签名+发送)│              │  CRUD    │
+│  Server  │              │ (发送)     │              │  CRUD    │
 └──────────┘              └──────────┘              └──────────┘
                                   ↑ retry (指数退避, max 5次)
 ```
@@ -20,7 +20,6 @@
 
 - **IMAP 轮询** — 定时拉取未读邮件，支持任意 IMAP 服务器
 - **路由匹配** — 按收件人地址匹配不同 Webhook URL
-- **签名投递** — HMAC-SHA256 签名，接收方可验证请求完整性
 - **持久化队列** — SQLite WAL 模式，崩溃恢复，不丢邮件
 - **指数退避** — 投递失败自动重试 5 次（60s → 120s → 240s → 480s → 960s）
 - **优雅关闭** — SIGINT/SIGTERM 信号处理，等待进行中的投递完成
@@ -55,7 +54,6 @@ cp config.example.json config.json
   "secure": true,
   "username": "you@gmail.com",
   "password": "your-app-password",
-  "signingSecret": "your-hmac-secret",
   "routes": [
     {
       "address": "alerts@yourdomain.com",
@@ -89,7 +87,6 @@ docker compose up -d
 | `secure` | `boolean` | ✅ | — | 是否启用 TLS |
 | `username` | `string` | ✅ | — | IMAP 用户名 |
 | `password` | `string` | ✅ | — | IMAP 密码 |
-| `signingSecret` | `string` | ✅ | — | HMAC-SHA256 签名密钥 |
 | `routes` | `array` | ✅ | — | 路由规则数组（见下表） |
 | `proxy` | `string` | — | — | SOCKS 代理（如 `socks5://127.0.0.1:1080`） |
 | `mailbox` | `string` | — | `INBOX` | 监听文件夹 |
@@ -110,7 +107,6 @@ docker compose up -d
 ```
 POST /your-webhook HTTP/1.1
 Content-Type: application/json
-X-Mailhooks-Signature: sha256=a1b2c3d4...
 ```
 
 ```json
@@ -132,74 +128,6 @@ X-Mailhooks-Signature: sha256=a1b2c3d4...
 | `text_body` | 纯文本正文 |
 | `html_body` | HTML 正文（无 HTML 时为 `null`） |
 | `received_at` | 收件时间（ISO 8601） |
-
-## 签名验证
-
-接收方应验证 `X-Mailhooks-Signature` 以确保请求来源可信、内容未被篡改。
-
-签名算法：`HMAC-SHA256(secret, requestBody)` → `sha256=<hex>`
-
-<details>
-<summary><strong>Node.js 验证示例</strong></summary>
-
-```js
-import { createHmac, timingSafeEqual } from "node:crypto";
-
-function verifyWebhookSignature(body, signature, secret) {
-  if (!signature?.startsWith("sha256=")) return false;
-
-  const hmac = createHmac("sha256", secret);
-  hmac.update(body, "utf-8");
-  const expected = "sha256=" + hmac.digest("hex");
-
-  try {
-    return timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
-  } catch {
-    return false; // 长度不匹配时 timingSafeEqual 会抛异常
-  }
-}
-
-// Express 示例
-app.post("/webhook", express.raw({ type: "*/*" }), (req, res) => {
-  const sig = req.headers["x-mailhooks-signature"];
-  if (!verifyWebhookSignature(req.body, sig, process.env.SIGNING_SECRET)) {
-    return res.status(401).json({ error: "Invalid signature" });
-  }
-  const payload = JSON.parse(req.body);
-  // 处理邮件...
-  res.json({ ok: true });
-});
-```
-
-</details>
-
-<details>
-<summary><strong>Python 验证示例</strong></summary>
-
-```python
-import hashlib, hmac, json
-from flask import Flask, request
-
-app = Flask(__name__)
-SECRET = "your-hmac-secret"
-
-def verify_signature(body: bytes, signature: str) -> bool:
-    if not signature.startswith("sha256="):
-        return False
-    expected = "sha256=" + hmac.new(SECRET.encode(), body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, signature)
-
-@app.post("/webhook")
-def webhook():
-    sig = request.headers.get("X-Mailhooks-Signature", "")
-    if not verify_signature(request.data, sig):
-        return {"error": "Invalid signature"}, 401
-    payload = json.loads(request.data)
-    # 处理邮件...
-    return {"ok": True}
-```
-
-</details>
 
 ## 重试策略
 

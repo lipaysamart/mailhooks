@@ -1,5 +1,3 @@
-import { sign } from "./signer.ts";
-
 export interface SendResult {
   ok: boolean;
   status: number;
@@ -8,16 +6,13 @@ export interface SendResult {
 
 export async function sendWebhook(
   url: string,
-  secret: string,
   body: string,
 ): Promise<SendResult> {
   try {
-    const signature = sign(secret, body);
     const res = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Mailhooks-Signature": signature,
       },
       body,
       signal: AbortSignal.timeout(10_000),

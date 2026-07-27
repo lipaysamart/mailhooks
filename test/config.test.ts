@@ -30,7 +30,6 @@ describe("loadConfig", () => {
         secure: true,
         username: "user@example.com",
         password: "secret",
-        signingSecret: "hmac-secret",
         mailbox: "INBOX",
         pollIntervalSeconds: 60,
         dbPath: "./mailhooks.db",
@@ -49,7 +48,6 @@ describe("loadConfig", () => {
     expect(config.secure).toBe(true);
     expect(config.username).toBe("user@example.com");
     expect(config.password).toBe("secret");
-    expect(config.signingSecret).toBe("hmac-secret");
     expect(config.mailbox).toBe("INBOX");
     expect(config.pollIntervalSeconds).toBe(60);
     expect(config.dbPath).toBe("./mailhooks.db");
@@ -65,7 +63,6 @@ describe("loadConfig", () => {
         secure: true,
         username: "user@example.com",
         password: "secret",
-        signingSecret: "hmac-secret",
         routes: [{ address: "a@e.com", url: "https://hooks.example.com" }],
       }),
     );
@@ -103,7 +100,6 @@ describe("loadConfig", () => {
         secure: true,
         username: "user@example.com",
         password: "secret",
-        signingSecret: "hmac-secret",
         routes: [],
       }),
     );
@@ -119,7 +115,6 @@ describe("loadConfig", () => {
         secure: true,
         username: "user@example.com",
         password: "secret",
-        signingSecret: "hmac-secret",
       }),
     );
 
@@ -134,42 +129,10 @@ describe("loadConfig", () => {
         secure: true,
         username: "user@example.com",
         password: "secret",
-        signingSecret: "hmac-secret",
         routes: "not-an-array",
       }),
     );
 
     await expect(loadConfig(path)).rejects.toThrow(/routes.*non-empty array/);
-  });
-
-  it("throws when signingSecret is missing", async () => {
-    const path = await writeConfigFile(
-      JSON.stringify({
-        host: "imap.example.com",
-        port: 993,
-        secure: true,
-        username: "user@example.com",
-        password: "secret",
-        routes: [{ address: "a@e.com", url: "https://hooks.example.com" }],
-      }),
-    );
-
-    await expect(loadConfig(path)).rejects.toThrow(/signingSecret/);
-  });
-
-  it("throws when signingSecret is empty string", async () => {
-    const path = await writeConfigFile(
-      JSON.stringify({
-        host: "imap.example.com",
-        port: 993,
-        secure: true,
-        username: "user@example.com",
-        password: "secret",
-        signingSecret: "",
-        routes: [{ address: "a@e.com", url: "https://hooks.example.com" }],
-      }),
-    );
-
-    await expect(loadConfig(path)).rejects.toThrow(/signingSecret/);
   });
 });
