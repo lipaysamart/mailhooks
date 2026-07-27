@@ -39,15 +39,15 @@ describe("buildPayload", () => {
     expect(result.received_at).toBe("2025-01-15T12:00:00.000Z");
   });
 
-  it("sets html_body to null when html is boolean", () => {
+  it("sets html_body to empty string when html is boolean", () => {
     const mail = makeMail({ html: false });
-    expect(buildPayload(mail, "a@e.com").html_body).toBeNull();
+    expect(buildPayload(mail, "a@e.com").html_body).toBe("");
   });
 
-  it("sets html_body to null when html is missing", () => {
+  it("sets html_body to empty string when html is missing", () => {
     const mail = makeMail();
     delete mail.html;
-    expect(buildPayload(mail, "a@e.com").html_body).toBeNull();
+    expect(buildPayload(mail, "a@e.com").html_body).toBe("");
   });
 
   it("defaults from to empty string when missing", () => {
