@@ -44,7 +44,6 @@ export async function startWorker(
 
       const result = await sendWebhook(
         job.webhook_url,
-        config.signingSecret,
         job.payload,
       );
 

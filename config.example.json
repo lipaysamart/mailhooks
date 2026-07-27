@@ -4,7 +4,6 @@
   "secure": true,
   "username": "user@example.com",
   "password": "your-password",
-  "signingSecret": "your-hmac-secret",
   "mailbox": "INBOX",
   "pollIntervalSeconds": 60,
   "dbPath": "./mailhooks.db",
