@@ -12,7 +12,7 @@ export function buildPayload(
     to: matchedAddress,
     subject: mail.subject ?? "",
     text_body: mail.text ?? "",
-    html_body: typeof mail.html === "string" ? mail.html : null,
+    html_body: typeof mail.html === "string" ? mail.html : "",
     received_at: date instanceof Date ? date.toISOString() : String(date),
   };
 }
