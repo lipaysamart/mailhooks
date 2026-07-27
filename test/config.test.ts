@@ -135,5 +135,4 @@ describe("loadConfig", () => {
 
     await expect(loadConfig(path)).rejects.toThrow(/routes.*non-empty array/);
   });
-
 });

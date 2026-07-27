@@ -48,15 +48,18 @@ describe("enqueue + dequeue", () => {
     enqueue(db, "third@example.com", "https://hooks.example.com/3", "3");
 
     // dequeue is non-atomic (no state change), so mark each as done after consuming
-    const job1 = dequeue(db)!;
+    const job1 = dequeue(db);
+    if (!job1) throw new Error("expected job1");
     expect(job1.to_address).toBe("first@example.com");
     markDone(db, job1.id);
 
-    const job2 = dequeue(db)!;
+    const job2 = dequeue(db);
+    if (!job2) throw new Error("expected job2");
     expect(job2.to_address).toBe("second@example.com");
     markDone(db, job2.id);
 
-    const job3 = dequeue(db)!;
+    const job3 = dequeue(db);
+    if (!job3) throw new Error("expected job3");
     expect(job3.to_address).toBe("third@example.com");
   });
 
@@ -103,7 +106,8 @@ describe("dequeue non-atomicity", () => {
 describe("markDone", () => {
   it("sets status to done and dequeue no longer returns it", () => {
     enqueue(db, "a@e.com", "https://h.example.com", "{}");
-    const job = dequeue(db)!;
+    const job = dequeue(db);
+    if (!job) throw new Error("expected job");
     markDone(db, job.id);
 
     expect(dequeue(db)).toBeNull();
@@ -121,7 +125,8 @@ describe("markDone", () => {
 describe("scheduleRetry", () => {
   it("increments attempts and sets future next_retry_at", () => {
     enqueue(db, "a@e.com", "https://h.example.com", "{}");
-    const job = dequeue(db)!;
+    const job = dequeue(db);
+    if (!job) throw new Error("expected job");
 
     const before = Date.now();
     scheduleRetry(db, job.id, 1);
@@ -143,7 +148,8 @@ describe("scheduleRetry", () => {
 
   it("exponential backoff: attempts=1 → 60s", () => {
     enqueue(db, "a@e.com", "https://h.example.com", "{}");
-    const job = dequeue(db)!;
+    const job = dequeue(db);
+    if (!job) throw new Error("expected job");
     const before = Date.now();
     scheduleRetry(db, job.id, 1);
 
@@ -160,7 +166,8 @@ describe("scheduleRetry", () => {
 
   it("exponential backoff: attempts=2 → 120s", () => {
     enqueue(db, "a@e.com", "https://h.example.com", "{}");
-    const job = dequeue(db)!;
+    const job = dequeue(db);
+    if (!job) throw new Error("expected job");
     const before = Date.now();
     scheduleRetry(db, job.id, 2);
 
@@ -177,7 +184,8 @@ describe("scheduleRetry", () => {
 
   it("exponential backoff: attempts=3 → 240s", () => {
     enqueue(db, "a@e.com", "https://h.example.com", "{}");
-    const job = dequeue(db)!;
+    const job = dequeue(db);
+    if (!job) throw new Error("expected job");
     const before = Date.now();
     scheduleRetry(db, job.id, 3);
 
@@ -196,7 +204,8 @@ describe("scheduleRetry", () => {
 describe("markFailed", () => {
   it("sets status to failed and dequeue no longer returns it", () => {
     enqueue(db, "a@e.com", "https://h.example.com", "{}");
-    const job = dequeue(db)!;
+    const job = dequeue(db);
+    if (!job) throw new Error("expected job");
     markFailed(db, job.id);
 
     expect(dequeue(db)).toBeNull();

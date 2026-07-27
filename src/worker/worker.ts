@@ -29,7 +29,7 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 export async function startWorker(
-  config: Config,
+  _config: Config,
   db: Database.Database,
   signal: AbortSignal,
 ): Promise<void> {
@@ -42,10 +42,7 @@ export async function startWorker(
         continue;
       }
 
-      const result = await sendWebhook(
-        job.webhook_url,
-        job.payload,
-      );
+      const result = await sendWebhook(job.webhook_url, job.payload);
 
       if (result.ok) {
         try {
