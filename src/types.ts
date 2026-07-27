@@ -3,7 +3,7 @@ export interface EmailSummary {
   to: string;
   subject: string;
   text_body: string;
-  html_body: string;
+  html_body: string | null;
   received_at: string;
 }
 
