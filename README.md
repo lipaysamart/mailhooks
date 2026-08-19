@@ -28,7 +28,7 @@
 
 ### 前置条件
 
-- **Node.js 22+**（使用 `--experimental-strip-types` 直接运行 TypeScript）
+- **Node.js 22.6+**（`--experimental-strip-types` 直接运行 TypeScript；Node 23.6+/24 起默认开启，无需 flag）
 - **npm**
 
 ### 安装
@@ -126,7 +126,7 @@ Content-Type: application/json
 | `to` | 匹配到的收件人地址 |
 | `subject` | 邮件主题 |
 | `text_body` | 纯文本正文 |
-| `html_body` | HTML 正文（无 HTML 时为 `null`） |
+| `html_body` | HTML 正文（无 HTML 时为空字符串 `""`） |
 | `received_at` | 收件时间（ISO 8601） |
 
 ## 重试策略
@@ -143,6 +143,11 @@ Content-Type: application/json
 | 6 | 960s | 31 分钟 |
 
 超过 6 次尝试后标记为 `failed`，不再投递。
+
+## 安全注意事项
+
+- **Webhook 无鉴权**：当前版本的投递不包含签名或鉴权机制，任何拿到 URL 的人都可以伪造投递。请务必使用 HTTPS 的接收端，并不要把 Webhook URL 暴露给不可信方。如需来源验证，可在接收端校验 payload 中的 `from` 字段，或在部署层自行增加签名（历史版本曾内置 HMAC-SHA256 签名，后移除，可在 git 历史中查看实现）。
+- **IMAP 凭据**：`config.json` 以明文存放 IMAP 密码。Gmail 等主流服务请使用 [App Password](https://myaccount.google.com/apppasswords)（需先开启两步验证），不要直接使用账号主密码；并注意 `config.json` 的文件权限（已加入 `.gitignore`，不会提交到仓库）。
 
 ## 开发
 
@@ -169,7 +174,7 @@ npm run format
 | 组件 | 技术 |
 |------|------|
 | 运行时 | Node.js 22+ (`--experimental-strip-types`) |
-| 语言 | TypeScript 5 (strict, ESM) |
+| 语言 | TypeScript 6 (strict, ESM) |
 | IMAP | [imapflow](https://imapflow.com/) |
 | 邮件解析 | [mailparser](https://nodemailer.com/extras/mailparser/) |
 | 队列存储 | SQLite (better-sqlite3, WAL 模式) |

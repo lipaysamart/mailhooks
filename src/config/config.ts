@@ -14,6 +14,27 @@ export interface Config {
   routes: WebhookRoute[];
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function validateRequiredString(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(
+      `Config validation failed: "${field}" must be a non-empty string`,
+    );
+  }
+  return value;
+}
+
+function validateOptionalString(
+  value: unknown,
+  field: string,
+): string | undefined {
+  if (value === undefined) return undefined;
+  return validateRequiredString(value, field);
+}
+
 export async function loadConfig(path: string): Promise<Config> {
   if (path === "") {
     throw new Error("Config file path cannot be empty");
@@ -41,23 +62,80 @@ export async function loadConfig(path: string): Promise<Config> {
     throw err;
   }
 
-  const routes = parsed.routes as WebhookRoute[] | undefined;
-  if (!routes || !Array.isArray(routes) || routes.length === 0) {
+  const routes = parsed.routes as unknown;
+  if (!Array.isArray(routes) || routes.length === 0) {
     throw new Error(
       'Config validation failed: "routes" must be a non-empty array',
     );
   }
 
+  const validatedRoutes: WebhookRoute[] = routes.map((route, index) => {
+    if (!isRecord(route)) {
+      throw new Error(
+        `Config validation failed: "routes[${index}]" must be an object`,
+      );
+    }
+    return {
+      address: validateRequiredString(
+        route.address,
+        `routes[${index}].address`,
+      ),
+      url: validateRequiredString(route.url, `routes[${index}].url`),
+    };
+  });
+
+  const host = validateRequiredString(parsed.host, "host");
+  const username = validateRequiredString(parsed.username, "username");
+  const password = validateRequiredString(parsed.password, "password");
+
+  if (
+    typeof parsed.port !== "number" ||
+    !Number.isInteger(parsed.port) ||
+    parsed.port <= 0
+  ) {
+    throw new Error(
+      'Config validation failed: "port" must be a positive integer',
+    );
+  }
+
+  if (typeof parsed.secure !== "boolean") {
+    throw new Error('Config validation failed: "secure" must be a boolean');
+  }
+
+  let pollIntervalSeconds = 60;
+  if (parsed.pollIntervalSeconds !== undefined) {
+    if (
+      typeof parsed.pollIntervalSeconds !== "number" ||
+      !Number.isFinite(parsed.pollIntervalSeconds) ||
+      parsed.pollIntervalSeconds <= 0
+    ) {
+      throw new Error(
+        'Config validation failed: "pollIntervalSeconds" must be a positive number',
+      );
+    }
+    pollIntervalSeconds = parsed.pollIntervalSeconds;
+  }
+
+  const mailbox =
+    parsed.mailbox === undefined
+      ? "INBOX"
+      : validateRequiredString(parsed.mailbox, "mailbox");
+  const dbPath =
+    parsed.dbPath === undefined
+      ? "./mailhooks.db"
+      : validateRequiredString(parsed.dbPath, "dbPath");
+  const proxy = validateOptionalString(parsed.proxy, "proxy");
+
   return {
-    host: parsed.host as string,
-    port: parsed.port as number,
-    secure: parsed.secure as boolean,
-    proxy: parsed.proxy as string | undefined,
-    username: parsed.username as string,
-    password: parsed.password as string,
-    mailbox: (parsed.mailbox as string) || "INBOX",
-    pollIntervalSeconds: (parsed.pollIntervalSeconds as number) || 60,
-    dbPath: (parsed.dbPath as string) || "./mailhooks.db",
-    routes,
+    host,
+    port: parsed.port,
+    secure: parsed.secure,
+    proxy,
+    username,
+    password,
+    mailbox,
+    pollIntervalSeconds,
+    dbPath,
+    routes: validatedRoutes,
   };
 }
