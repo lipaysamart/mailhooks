@@ -33,3 +33,79 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build -t mailhooks .
+
+  # 构建测试镜像并推送到 GHCR，供测试环境验证行为。
+  # 仅在 push 到 dev 分支时触发（PR 与 main 不推送中间镜像）；需要单测通过后才构建。
+  test-image:
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    needs: [test]
+    permissions:
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}:test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 第一步：仅本地构建（load），运行冒烟验证通过后才推送
+      - name: Build test image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          tags: ${{ env.IMAGE }}
+          load: true
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 行为冒烟：容器应正常启动并存活，不因配置/数据库问题崩溃
+      - name: Smoke test test image
+        run: |
+          set -euo pipefail
+          cat > /tmp/mh-smoke.json <<'EOF'
+          {
+            "host": "imap.example.com",
+            "port": 993,
+            "secure": true,
+            "username": "smoke@example.com",
+            "password": "smoke",
+            "dbPath": "./mailhooks.db",
+            "routes": [
+              { "address": "smoke@example.com", "url": "https://hooks.example.com/smoke" }
+            ]
+          }
+          EOF
+          docker run -d --name mh-smoke -v /tmp/mh-smoke.json:/app/config.json:ro "$IMAGE"
+          sleep 15
+          if ! docker ps --filter name=mh-smoke --format '{{.Names}}' | grep -q mh-smoke; then
+            echo "::error::smoke container exited or crashed"
+            docker logs mh-smoke || true
+            docker rm -f mh-smoke >/dev/null 2>&1 || true
+            exit 1
+          fi
+          if docker logs mh-smoke 2>&1 | grep -Ei 'SqliteError|unable to open database'; then
+            echo "::error::SQLite crash detected in smoke test"
+            docker rm -f mh-smoke >/dev/null 2>&1 || true
+            exit 1
+          fi
+          echo "::notice::smoke OK: container running, no sqlite crash"
+          docker rm -f mh-smoke >/dev/null 2>&1 || true
+
+      # 冒烟通过后再推送 :test tag
+      - name: Push test image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          tags: ${{ env.IMAGE }}
+          push: true
+          cache-from: type=gha
