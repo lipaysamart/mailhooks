@@ -6,7 +6,19 @@ import { startWorker } from "./src/worker/worker.ts";
 const configPath = `${process.cwd()}/config.json`;
 const config = await loadConfig(configPath);
 
-const db = initDb(config.dbPath);
+let db: ReturnType<typeof initDb>;
+try {
+  db = initDb(config.dbPath);
+} catch (err) {
+  console.error(
+    `Failed to open SQLite database at "${config.dbPath}": ${(err as Error).message}`,
+  );
+  console.error(
+    "Check that the directory exists and is writable by the current user. " +
+      'In Docker, set "dbPath" to a writable path such as "./data/mailhooks.db".',
+  );
+  process.exit(1);
+}
 
 const abortController = new AbortController();
 const workerPromise = startWorker(config, db, abortController.signal);

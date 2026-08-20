@@ -6,6 +6,7 @@ import {
   markFailed,
   scheduleRetry,
 } from "../queue/queue.ts";
+import type { QueueJob } from "../types.ts";
 import { sendWebhook } from "../webhook/sender.ts";
 
 export const MAX_RETRIES = 5;
@@ -28,6 +29,41 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
+export async function processJob(
+  db: Database.Database,
+  job: QueueJob,
+): Promise<void> {
+  const result = await sendWebhook(job.webhook_url, job.payload);
+
+  if (result.ok) {
+    try {
+      markDone(db, job.id);
+    } catch (err) {
+      console.error(
+        `[worker] Job ${job.id} delivered but markDone failed:`,
+        err,
+      );
+    }
+    console.log(
+      `[worker] Job ${job.id} → ${job.webhook_url} delivered (${result.status})`,
+    );
+    return;
+  }
+
+  const newAttempts = job.attempts + 1;
+  if (newAttempts > MAX_RETRIES) {
+    markFailed(db, job.id);
+    console.error(
+      `[worker] Job ${job.id} failed after ${newAttempts} attempts, marking failed`,
+    );
+  } else {
+    scheduleRetry(db, job.id, newAttempts);
+    console.warn(
+      `[worker] Job ${job.id} failed (attempt ${newAttempts}/${MAX_RETRIES}), retrying later`,
+    );
+  }
+}
+
 export async function startWorker(
   _config: Config,
   db: Database.Database,
@@ -42,34 +78,7 @@ export async function startWorker(
         continue;
       }
 
-      const result = await sendWebhook(job.webhook_url, job.payload);
-
-      if (result.ok) {
-        try {
-          markDone(db, job.id);
-        } catch (err) {
-          console.error(
-            `[worker] Job ${job.id} delivered but markDone failed:`,
-            err,
-          );
-        }
-        console.log(
-          `[worker] Job ${job.id} → ${job.webhook_url} delivered (${result.status})`,
-        );
-      } else {
-        const newAttempts = job.attempts + 1;
-        if (newAttempts > MAX_RETRIES) {
-          markFailed(db, job.id);
-          console.error(
-            `[worker] Job ${job.id} failed after ${newAttempts} attempts, marking failed`,
-          );
-        } else {
-          scheduleRetry(db, job.id, newAttempts);
-          console.warn(
-            `[worker] Job ${job.id} failed (attempt ${newAttempts}/${MAX_RETRIES}), retrying later`,
-          );
-        }
-      }
+      await processJob(db, job);
     } catch (err) {
       console.error("[worker] Unexpected error:", err);
       await sleep(5_000, signal);

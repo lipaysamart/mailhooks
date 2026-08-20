@@ -135,4 +135,137 @@ describe("loadConfig", () => {
 
     await expect(loadConfig(path)).rejects.toThrow(/routes.*non-empty array/);
   });
+
+  it("throws when host is missing", async () => {
+    const path = await writeConfigFile(
+      JSON.stringify({
+        port: 993,
+        secure: true,
+        username: "user@example.com",
+        password: "secret",
+        routes: [{ address: "a@e.com", url: "https://hooks.example.com" }],
+      }),
+    );
+
+    await expect(loadConfig(path)).rejects.toThrow(/"host".*non-empty string/);
+  });
+
+  it("throws when port is not a positive integer", async () => {
+    for (const port of ["993", 0, -1, 993.5]) {
+      const path = await writeConfigFile(
+        JSON.stringify({
+          host: "imap.example.com",
+          port,
+          secure: true,
+          username: "user@example.com",
+          password: "secret",
+          routes: [{ address: "a@e.com", url: "https://hooks.example.com" }],
+        }),
+      );
+
+      await expect(loadConfig(path)).rejects.toThrow(
+        /"port".*positive integer/,
+      );
+    }
+  });
+
+  it("throws when secure is not a boolean", async () => {
+    const path = await writeConfigFile(
+      JSON.stringify({
+        host: "imap.example.com",
+        port: 993,
+        secure: "yes",
+        username: "user@example.com",
+        password: "secret",
+        routes: [{ address: "a@e.com", url: "https://hooks.example.com" }],
+      }),
+    );
+
+    await expect(loadConfig(path)).rejects.toThrow(/"secure".*boolean/);
+  });
+
+  it("throws when username or password is missing", async () => {
+    const base = {
+      host: "imap.example.com",
+      port: 993,
+      secure: true,
+      routes: [{ address: "a@e.com", url: "https://hooks.example.com" }],
+    };
+
+    const noUsername = await writeConfigFile(
+      JSON.stringify({ ...base, password: "secret" }),
+    );
+    await expect(loadConfig(noUsername)).rejects.toThrow(
+      /"username".*non-empty string/,
+    );
+
+    const noPassword = await writeConfigFile(
+      JSON.stringify({ ...base, username: "user@example.com" }),
+    );
+    await expect(loadConfig(noPassword)).rejects.toThrow(
+      /"password".*non-empty string/,
+    );
+  });
+
+  it("throws when route address or url is missing", async () => {
+    const base = {
+      host: "imap.example.com",
+      port: 993,
+      secure: true,
+      username: "user@example.com",
+      password: "secret",
+    };
+
+    const noAddress = await writeConfigFile(
+      JSON.stringify({
+        ...base,
+        routes: [{ url: "https://hooks.example.com" }],
+      }),
+    );
+    await expect(loadConfig(noAddress)).rejects.toThrow(
+      /routes\[0\]\.address.*non-empty string/,
+    );
+
+    const noUrl = await writeConfigFile(
+      JSON.stringify({ ...base, routes: [{ address: "a@e.com" }] }),
+    );
+    await expect(loadConfig(noUrl)).rejects.toThrow(
+      /routes\[0\]\.url.*non-empty string/,
+    );
+  });
+
+  it("throws when a route is not an object", async () => {
+    const path = await writeConfigFile(
+      JSON.stringify({
+        host: "imap.example.com",
+        port: 993,
+        secure: true,
+        username: "user@example.com",
+        password: "secret",
+        routes: ["not-an-object"],
+      }),
+    );
+
+    await expect(loadConfig(path)).rejects.toThrow(
+      /routes\[0\].*must be an object/,
+    );
+  });
+
+  it("passes through optional proxy and ignores unknown fields", async () => {
+    const path = await writeConfigFile(
+      JSON.stringify({
+        host: "imap.example.com",
+        port: 993,
+        secure: true,
+        username: "user@example.com",
+        password: "secret",
+        proxy: "socks5://127.0.0.1:1080",
+        unknownField: "ignored",
+        routes: [{ address: "a@e.com", url: "https://hooks.example.com" }],
+      }),
+    );
+
+    const config = await loadConfig(path);
+    expect(config.proxy).toBe("socks5://127.0.0.1:1080");
+  });
 });

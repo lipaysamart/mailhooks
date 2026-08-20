@@ -11,6 +11,6 @@ WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY package.json index.ts tsconfig.json ./
 COPY src/ ./src/
-RUN mkdir -p /app/data && chown node:node /app/data
+RUN chown -R node:node /app
 USER node
 CMD ["node", "--experimental-strip-types", "index.ts"]
