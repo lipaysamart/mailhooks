@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import type { LogFormat, LogLevel } from "../log/logger.ts";
 import type { WebhookRoute } from "../types.ts";
 
 export interface Config {
@@ -12,6 +13,8 @@ export interface Config {
   pollIntervalSeconds: number;
   dbPath: string;
   routes: WebhookRoute[];
+  logLevel: LogLevel;
+  logFormat: LogFormat;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -33,6 +36,26 @@ function validateOptionalString(
 ): string | undefined {
   if (value === undefined) return undefined;
   return validateRequiredString(value, field);
+}
+
+const LOG_LEVELS: readonly LogLevel[] = ["debug", "info", "warn", "error"];
+const LOG_FORMATS: readonly LogFormat[] = ["auto", "pretty", "json"];
+
+function validateOptionalEnum<T extends string>(
+  value: unknown,
+  field: string,
+  allowed: readonly T[],
+): T | undefined {
+  if (value === undefined) return undefined;
+  if (
+    typeof value !== "string" ||
+    !(allowed as readonly string[]).includes(value)
+  ) {
+    throw new Error(
+      `Config validation failed: "${field}" must be one of: ${allowed.join(", ")}`,
+    );
+  }
+  return value as T;
 }
 
 export async function loadConfig(path: string): Promise<Config> {
@@ -125,6 +148,10 @@ export async function loadConfig(path: string): Promise<Config> {
       ? "./mailhooks.db"
       : validateRequiredString(parsed.dbPath, "dbPath");
   const proxy = validateOptionalString(parsed.proxy, "proxy");
+  const logLevel =
+    validateOptionalEnum(parsed.logLevel, "logLevel", LOG_LEVELS) ?? "info";
+  const logFormat =
+    validateOptionalEnum(parsed.logFormat, "logFormat", LOG_FORMATS) ?? "auto";
 
   return {
     host,
@@ -137,5 +164,7 @@ export async function loadConfig(path: string): Promise<Config> {
     pollIntervalSeconds,
     dbPath,
     routes: validatedRoutes,
+    logLevel,
+    logFormat,
   };
 }

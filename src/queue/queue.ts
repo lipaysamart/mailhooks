@@ -34,17 +34,21 @@ export function markDone(db: Database.Database, id: number): void {
   });
 }
 
+export const BASE_RETRY_DELAY_MS = 60_000;
+
+export function retryDelayMs(attempts: number): number {
+  return BASE_RETRY_DELAY_MS * 2 ** (attempts - 1);
+}
+
 export function scheduleRetry(
   db: Database.Database,
   id: number,
   attempts: number,
 ): void {
   const now = Date.now();
-  const baseDelayMs = 60_000;
-  const delayMs = baseDelayMs * 2 ** (attempts - 1);
   db.prepare(
     `UPDATE queue SET status = 'pending', attempts = @attempts, next_retry_at = @next_retry_at, updated_at = @now WHERE id = @id`,
-  ).run({ id, attempts, next_retry_at: now + delayMs, now });
+  ).run({ id, attempts, next_retry_at: now + retryDelayMs(attempts), now });
 }
 
 export function markFailed(db: Database.Database, id: number): void {

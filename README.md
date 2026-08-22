@@ -57,6 +57,8 @@ cp config.example.json config.json
 | `mailbox` | `string` | — | `INBOX` | 监听的文件夹 |
 | `pollIntervalSeconds` | `number` | — | `60` | 轮询间隔（秒），须为正数 |
 | `dbPath` | `string` | — | `./mailhooks.db` | SQLite 数据库文件路径 |
+| `logLevel` | `string` | — | `info` | 日志级别：`debug` / `info` / `warn` / `error` |
+| `logFormat` | `string` | — | `auto` | 日志格式：`auto` / `pretty` / `json`（`auto` = 终端用 `pretty`，否则 `json`） |
 
 **routes 子项（每项必填）：**
 
@@ -66,6 +68,21 @@ cp config.example.json config.json
 | `url` | `string` | 转发目标 Webhook URL |
 
 > 配置为明文持有 IMAP 密码，请留意 `config.json` 的文件权限（已加入 `.gitignore`，不会提交到仓库）。
+
+## 日志
+
+所有日志带时间戳、级别和组件标签（`app` / `poller` / `imap` / `worker`），每轮轮询都会输出一条 summary 心跳：
+
+```
+08:18:55.373 INFO  [app] starting host=imap.example.com mailbox=INBOX routes=2 pollInterval=60s dbPath=./mailhooks.db
+08:18:56.051 INFO  [poller] poll complete found=3 enqueued=2 noRoute=1 durationMs=678
+08:18:56.389 INFO  [worker] delivered jobId=1 url=https://hooks.example.com/alerts status=200 latencyMs=312
+08:19:56.401 WARN  [worker] delivery failed jobId=2 url=https://hooks.example.com/alerts attempt=1/5 cause=HTTP 503 nextRetryIn=1m
+```
+
+非终端环境（如 Docker）默认输出 JSON，每行一条记录，便于采集。
+
+环境变量 `LOG_LEVEL` / `LOG_FORMAT` 优先于配置文件。`logLevel=debug` 可看到 IMAP 协议级日志与轮询细节。
 
 ## 启动
 

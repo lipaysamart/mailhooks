@@ -49,6 +49,8 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     mailbox: "INBOX",
     pollIntervalSeconds: 60,
     dbPath: ":memory:",
+    logLevel: "info",
+    logFormat: "auto",
     routes: [
       {
         address: "alerts@example.com",

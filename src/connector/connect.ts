@@ -1,5 +1,32 @@
-import { ImapFlow } from "imapflow";
+import { ImapFlow, type Logger as ImapLogger } from "imapflow";
 import type { Config } from "../config/config.ts";
+import { type Logger, log } from "../log/logger.ts";
+
+const logger = log.child("imap");
+
+// Bridges ImapFlow's pino-style logger ({msg, err, ...} objects) to ours.
+// Lines are emitted at debug level, so they stay hidden unless level=debug.
+function imapLoggerBridge(target: Logger): ImapLogger {
+  const wrap =
+    (level: "debug" | "info" | "warn" | "error") =>
+    (obj: unknown): void => {
+      const record =
+        typeof obj === "object" && obj !== null
+          ? (obj as Record<string, unknown>)
+          : { msg: String(obj) };
+      const { msg, err, ...fields } = record;
+      target[level](
+        typeof msg === "string" ? msg : "imap",
+        err instanceof Error ? { ...fields, err } : fields,
+      );
+    };
+  return {
+    debug: wrap("debug"),
+    info: wrap("info"),
+    warn: wrap("warn"),
+    error: wrap("error"),
+  };
+}
 
 export async function connect(config: Config) {
   const client = new ImapFlow({
@@ -7,7 +34,7 @@ export async function connect(config: Config) {
     port: config.port,
     secure: config.secure,
     proxy: config.proxy,
-    logger: false,
+    logger: imapLoggerBridge(logger),
     disableAutoIdle: true,
     auth: {
       user: config.username,
@@ -17,8 +44,7 @@ export async function connect(config: Config) {
 
   try {
     await client.connect();
-    console.log("Connected successfully");
-    console.log("Server capabilities:", client.capabilities);
+    logger.debug("connected", { host: config.host, port: config.port });
     return client;
   } catch (err) {
     client.close();

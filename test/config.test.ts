@@ -71,6 +71,48 @@ describe("loadConfig", () => {
     expect(config.mailbox).toBe("INBOX");
     expect(config.pollIntervalSeconds).toBe(60);
     expect(config.dbPath).toBe("./mailhooks.db");
+    expect(config.logLevel).toBe("info");
+    expect(config.logFormat).toBe("auto");
+  });
+
+  it("accepts valid logLevel and logFormat", async () => {
+    const path = await writeConfigFile(
+      JSON.stringify({
+        host: "imap.example.com",
+        port: 993,
+        secure: true,
+        username: "user@example.com",
+        password: "secret",
+        routes: [{ address: "a@e.com", url: "https://hooks.example.com" }],
+        logLevel: "debug",
+        logFormat: "json",
+      }),
+    );
+
+    const config = await loadConfig(path);
+    expect(config.logLevel).toBe("debug");
+    expect(config.logFormat).toBe("json");
+  });
+
+  it.each([
+    ["logLevel", "verbose"],
+    ["logFormat", "yaml"],
+  ])("throws on invalid %s", async (field, value) => {
+    const path = await writeConfigFile(
+      JSON.stringify({
+        host: "imap.example.com",
+        port: 993,
+        secure: true,
+        username: "user@example.com",
+        password: "secret",
+        routes: [{ address: "a@e.com", url: "https://hooks.example.com" }],
+        [field]: value,
+      }),
+    );
+
+    await expect(loadConfig(path)).rejects.toThrow(
+      new RegExp(`"${field}" must be one of`),
+    );
   });
 
   it("throws when file does not exist", async () => {
