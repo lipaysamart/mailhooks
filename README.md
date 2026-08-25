@@ -2,36 +2,12 @@
 
 **邮件 → Webhook 桥接服务** — 监听 IMAP 邮箱，将收到的邮件以 HTTP POST 转发到指定 URL。
 
-```
-┌──────────┐    IMAP     ┌──────────┐   enqueue    ┌──────────┐
-│  邮箱    │ ──────────→ │  Poller  │ ──────────→  │  SQLite  │
-│ (Gmail…) │             │ (解析+路由)│              │  (队列)   │
-└──────────┘             └──────────┘              └────┬─────┘
-                                                        │ dequeue
-                                                        ▼
-┌──────────┐   HTTP POST  ┌──────────┐   markDone   ┌──────────┐
-│ Webhook  │ ←─────────── │  Worker  │ ←─────────── │  Queue   │
-│  Server  │              │ (发送)     │              │  CRUD    │
-└──────────┘              └──────────┘              └──────────┘
-                                  ↑ retry (指数退避, max 5次)
-```
+## 前置条件
 
-## 特性
-
-- **IMAP 轮询** — 定时拉取未读邮件，支持任意 IMAP 服务器
-- **路由匹配** — 按收件人地址匹配不同 Webhook URL
-- **持久化队列** — SQLite WAL 模式，崩溃恢复，不丢邮件
-- **指数退避** — 投递失败自动重试 5 次（60s → 120s → 240s → 480s → 960s）
-- **优雅关闭** — SIGINT/SIGTERM 信号处理，等待进行中的投递完成
-
-## 快速开始
-
-### 前置条件
-
-- **Node.js 22+**（使用 `--experimental-strip-types` 直接运行 TypeScript）
+- **Node.js 22.6+**（`--experimental-strip-types` 直接运行 TypeScript；Node 23.6+/24 起默认开启，无需 flag）
 - **npm**
 
-### 安装
+## 安装
 
 ```bash
 git clone https://github.com/lipaysamart/mailhooks.git
@@ -39,13 +15,13 @@ cd mailhooks
 npm install
 ```
 
-### 配置
+## 配置
 
 ```bash
 cp config.example.json config.json
 ```
 
-编辑 `config.json`，填入真实配置：
+编辑 `config.json` 填入真实配置，完整示例见 [`config.example.json`](./config.example.json)：
 
 ```json
 {
@@ -63,22 +39,11 @@ cp config.example.json config.json
 }
 ```
 
-> 💡 Gmail 用户需使用 [App Password](https://myaccount.google.com/apppasswords)（需先开启两步验证）。
+> 💡 Gmail 用户需使用 [App Password](https://myaccount.google.com/apppasswords)（需先开启两步验证），不要使用账号主密码。
 
-### 启动
+启动时会校验配置：`host` / `port` / `secure` / `username` / `password` / `routes`（及其每一项的 `address` / `url`）均为必填且类型正确，否则直接报错退出。
 
-```bash
-npm run dev
-```
-
-### Docker 部署
-
-```bash
-# 注意：config.json 中需设置 "dbPath": "./data/mailhooks.db" 以持久化队列数据
-docker compose up -d
-```
-
-## 配置参考
+### 配置参考
 
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|:----:|--------|------|
@@ -87,95 +52,56 @@ docker compose up -d
 | `secure` | `boolean` | ✅ | — | 是否启用 TLS |
 | `username` | `string` | ✅ | — | IMAP 用户名 |
 | `password` | `string` | ✅ | — | IMAP 密码 |
-| `routes` | `array` | ✅ | — | 路由规则数组（见下表） |
+| `routes` | `array` | ✅ | — | 路由规则数组，至少 1 条（见下表） |
 | `proxy` | `string` | — | — | SOCKS 代理（如 `socks5://127.0.0.1:1080`） |
-| `mailbox` | `string` | — | `INBOX` | 监听文件夹 |
-| `pollIntervalSeconds` | `number` | — | `60` | 轮询间隔（秒） |
-| `dbPath` | `string` | — | `./mailhooks.db` | SQLite 数据库路径 |
+| `mailbox` | `string` | — | `INBOX` | 监听的文件夹 |
+| `pollIntervalSeconds` | `number` | — | `60` | 轮询间隔（秒），须为正数 |
+| `dbPath` | `string` | — | `./mailhooks.db` | SQLite 数据库文件路径 |
+| `logLevel` | `string` | — | `info` | 日志级别：`debug` / `info` / `warn` / `error` |
+| `logFormat` | `string` | — | `auto` | 日志格式：`auto` / `pretty` / `json`（`auto` = 终端用 `pretty`，否则 `json`） |
 
-**routes 子项：**
+**routes 子项（每项必填）：**
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `address` | `string` | 匹配的收件人地址（不区分大小写） |
 | `url` | `string` | 转发目标 Webhook URL |
 
-## Webhook 格式
+> 配置为明文持有 IMAP 密码，请留意 `config.json` 的文件权限（已加入 `.gitignore`，不会提交到仓库）。
 
-邮件到达后，服务向匹配的 URL 发送 `POST` 请求：
+## 日志
+
+所有日志带时间戳、级别和组件标签（`app` / `poller` / `imap` / `worker`），每轮轮询都会输出一条 summary 心跳：
 
 ```
-POST /your-webhook HTTP/1.1
-Content-Type: application/json
+08:18:55.373 INFO  [app] starting host=imap.example.com mailbox=INBOX routes=2 pollInterval=60s dbPath=./mailhooks.db
+08:18:56.051 INFO  [poller] poll complete found=3 enqueued=2 noRoute=1 durationMs=678
+08:18:56.389 INFO  [worker] delivered jobId=1 url=https://hooks.example.com/alerts status=200 latencyMs=312
+08:19:56.401 WARN  [worker] delivery failed jobId=2 url=https://hooks.example.com/alerts attempt=1/5 cause=HTTP 503 nextRetryIn=1m
 ```
 
-```json
-{
-  "from": "sender@example.com",
-  "to": "alerts@yourdomain.com",
-  "subject": "服务器告警",
-  "text_body": "CPU 使用率超过 90%",
-  "html_body": "<p>CPU 使用率超过 90%</p>",
-  "received_at": "2025-01-15T08:30:00.000Z"
-}
-```
+非终端环境（如 Docker）默认输出 JSON，每行一条记录，便于采集。
 
-| 字段 | 说明 |
-|------|------|
-| `from` | 发件人地址 |
-| `to` | 匹配到的收件人地址 |
-| `subject` | 邮件主题 |
-| `text_body` | 纯文本正文 |
-| `html_body` | HTML 正文（无 HTML 时为 `null`） |
-| `received_at` | 收件时间（ISO 8601） |
+环境变量 `LOG_LEVEL` / `LOG_FORMAT` 优先于配置文件。`logLevel=debug` 可看到 IMAP 协议级日志与轮询细节。
 
-## 重试策略
-
-投递失败后自动重试，采用指数退避：
-
-| 尝试次数 | 延迟 | 累计等待 |
-|:--------:|:----:|:--------:|
-| 1（初始） | — | — |
-| 2 | 60s | 1 分钟 |
-| 3 | 120s | 3 分钟 |
-| 4 | 240s | 7 分钟 |
-| 5 | 480s | 15 分钟 |
-| 6 | 960s | 31 分钟 |
-
-超过 6 次尝试后标记为 `failed`，不再投递。
-
-## 开发
+## 启动
 
 ```bash
-# 安装依赖
-npm install
-
-# 启动（watch 模式）
-npm run dev:watch
-
-# 测试
-npm test
-
-# 类型检查
-npx tsc --noEmit
-
-# 代码检查
-npm run lint
-npm run format
+npm run dev        # 直接运行
+npm run dev:watch  # watch 模式（开发用）
 ```
 
-## 技术栈
+首次启动立即执行一轮轮询，之后按 `pollIntervalSeconds`（默认 60s）周期性轮询。
 
-| 组件 | 技术 |
-|------|------|
-| 运行时 | Node.js 22+ (`--experimental-strip-types`) |
-| 语言 | TypeScript 5 (strict, ESM) |
-| IMAP | [imapflow](https://imapflow.com/) |
-| 邮件解析 | [mailparser](https://nodemailer.com/extras/mailparser/) |
-| 队列存储 | SQLite (better-sqlite3, WAL 模式) |
-| 测试 | vitest |
-| 代码规范 | biome |
-| 容器化 | Docker (multi-stage build) |
+### Docker 部署
+
+```bash
+docker compose up -d
+```
+
+`docker-compose.yml` 会挂载当前目录的 `config.json`。**如需持久化队列数据，请在 `config.json` 中设置** `"dbPath": "./data/mailhooks.db"`（对应命名卷 `mailhooks-data`），否则数据存于容器可写层，容器销毁后丢失。
+
+查看日志：`docker compose logs -f mailhooks`
 
 ## License
 

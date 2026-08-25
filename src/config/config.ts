@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import type { LogFormat, LogLevel } from "../log/logger.ts";
 import type { WebhookRoute } from "../types.ts";
 
 export interface Config {
@@ -12,6 +13,49 @@ export interface Config {
   pollIntervalSeconds: number;
   dbPath: string;
   routes: WebhookRoute[];
+  logLevel: LogLevel;
+  logFormat: LogFormat;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function validateRequiredString(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(
+      `Config validation failed: "${field}" must be a non-empty string`,
+    );
+  }
+  return value;
+}
+
+function validateOptionalString(
+  value: unknown,
+  field: string,
+): string | undefined {
+  if (value === undefined) return undefined;
+  return validateRequiredString(value, field);
+}
+
+const LOG_LEVELS: readonly LogLevel[] = ["debug", "info", "warn", "error"];
+const LOG_FORMATS: readonly LogFormat[] = ["auto", "pretty", "json"];
+
+function validateOptionalEnum<T extends string>(
+  value: unknown,
+  field: string,
+  allowed: readonly T[],
+): T | undefined {
+  if (value === undefined) return undefined;
+  if (
+    typeof value !== "string" ||
+    !(allowed as readonly string[]).includes(value)
+  ) {
+    throw new Error(
+      `Config validation failed: "${field}" must be one of: ${allowed.join(", ")}`,
+    );
+  }
+  return value as T;
 }
 
 export async function loadConfig(path: string): Promise<Config> {
@@ -41,23 +85,86 @@ export async function loadConfig(path: string): Promise<Config> {
     throw err;
   }
 
-  const routes = parsed.routes as WebhookRoute[] | undefined;
-  if (!routes || !Array.isArray(routes) || routes.length === 0) {
+  const routes = parsed.routes as unknown;
+  if (!Array.isArray(routes) || routes.length === 0) {
     throw new Error(
       'Config validation failed: "routes" must be a non-empty array',
     );
   }
 
+  const validatedRoutes: WebhookRoute[] = routes.map((route, index) => {
+    if (!isRecord(route)) {
+      throw new Error(
+        `Config validation failed: "routes[${index}]" must be an object`,
+      );
+    }
+    return {
+      address: validateRequiredString(
+        route.address,
+        `routes[${index}].address`,
+      ),
+      url: validateRequiredString(route.url, `routes[${index}].url`),
+    };
+  });
+
+  const host = validateRequiredString(parsed.host, "host");
+  const username = validateRequiredString(parsed.username, "username");
+  const password = validateRequiredString(parsed.password, "password");
+
+  if (
+    typeof parsed.port !== "number" ||
+    !Number.isInteger(parsed.port) ||
+    parsed.port <= 0
+  ) {
+    throw new Error(
+      'Config validation failed: "port" must be a positive integer',
+    );
+  }
+
+  if (typeof parsed.secure !== "boolean") {
+    throw new Error('Config validation failed: "secure" must be a boolean');
+  }
+
+  let pollIntervalSeconds = 60;
+  if (parsed.pollIntervalSeconds !== undefined) {
+    if (
+      typeof parsed.pollIntervalSeconds !== "number" ||
+      !Number.isFinite(parsed.pollIntervalSeconds) ||
+      parsed.pollIntervalSeconds <= 0
+    ) {
+      throw new Error(
+        'Config validation failed: "pollIntervalSeconds" must be a positive number',
+      );
+    }
+    pollIntervalSeconds = parsed.pollIntervalSeconds;
+  }
+
+  const mailbox =
+    parsed.mailbox === undefined
+      ? "INBOX"
+      : validateRequiredString(parsed.mailbox, "mailbox");
+  const dbPath =
+    parsed.dbPath === undefined
+      ? "./mailhooks.db"
+      : validateRequiredString(parsed.dbPath, "dbPath");
+  const proxy = validateOptionalString(parsed.proxy, "proxy");
+  const logLevel =
+    validateOptionalEnum(parsed.logLevel, "logLevel", LOG_LEVELS) ?? "info";
+  const logFormat =
+    validateOptionalEnum(parsed.logFormat, "logFormat", LOG_FORMATS) ?? "auto";
+
   return {
-    host: parsed.host as string,
-    port: parsed.port as number,
-    secure: parsed.secure as boolean,
-    proxy: parsed.proxy as string | undefined,
-    username: parsed.username as string,
-    password: parsed.password as string,
-    mailbox: (parsed.mailbox as string) || "INBOX",
-    pollIntervalSeconds: (parsed.pollIntervalSeconds as number) || 60,
-    dbPath: (parsed.dbPath as string) || "./mailhooks.db",
-    routes,
+    host,
+    port: parsed.port,
+    secure: parsed.secure,
+    proxy,
+    username,
+    password,
+    mailbox,
+    pollIntervalSeconds,
+    dbPath,
+    routes: validatedRoutes,
+    logLevel,
+    logFormat,
   };
 }

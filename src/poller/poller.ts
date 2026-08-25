@@ -3,8 +3,11 @@ import type { MailboxLockObject } from "imapflow";
 import type { ParsedMail } from "mailparser";
 import type { Config } from "../config/config.ts";
 import { connect } from "../connector/connect.ts";
+import { log } from "../log/logger.ts";
 import { enqueue } from "../queue/queue.ts";
 import { buildPayload } from "../webhook/payload.ts";
+
+const logger = log.child("poller");
 
 async function parseMail(source: Buffer): Promise<ParsedMail> {
   const { simpleParser } = await import("mailparser");
@@ -15,6 +18,9 @@ export async function pollOnce(
   config: Config,
   db: Database.Database,
 ): Promise<number> {
+  const startedAt = Date.now();
+  logger.debug("poll starting", { mailbox: config.mailbox });
+
   const client = await connect(config);
   const mailbox = config.mailbox;
 
@@ -22,12 +28,12 @@ export async function pollOnce(
   try {
     lock = await client.getMailboxLock(mailbox);
   } catch (err) {
-    console.error("Failed to acquire mailbox lock:", err);
     await client.close();
     throw err;
   }
 
   let enqueued = 0;
+  let noRoute = 0;
 
   try {
     const uids = (await client.search(
@@ -48,7 +54,11 @@ export async function pollOnce(
         const matched = findMatchingRoute(toAddresses, config.routes);
 
         if (!matched) {
-          console.warn(`No route for any recipient: ${toAddresses.join(", ")}`);
+          noRoute++;
+          logger.warn("no route matched", {
+            uid,
+            recipients: toAddresses.join(","),
+          });
           await client.messageFlagsAdd(uid, ["\\Seen"], { uid: true });
           continue;
         }
@@ -56,10 +66,11 @@ export async function pollOnce(
         const payloadObj = buildPayload(mail, matched.address);
         enqueue(db, matched.address, matched.url, JSON.stringify(payloadObj));
         enqueued++;
+        logger.debug("enqueued", { uid, to: matched.address });
 
         await client.messageFlagsAdd(uid, ["\\Seen"], { uid: true });
       } catch (err) {
-        console.error(`Error processing message UID ${uid}:`, err);
+        logger.error("failed to process message", { uid, err });
         try {
           await client.messageFlagsAdd(uid, ["\\Seen"], { uid: true });
         } catch {
@@ -67,12 +78,19 @@ export async function pollOnce(
         }
       }
     }
+
+    logger.info("poll complete", {
+      found: uids.length,
+      enqueued,
+      noRoute,
+      durationMs: Date.now() - startedAt,
+    });
+
+    return enqueued;
   } finally {
     lock.release();
     await client.close();
   }
-
-  return enqueued;
 }
 
 function extractAddresses(

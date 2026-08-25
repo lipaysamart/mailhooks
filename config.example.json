@@ -7,6 +7,8 @@
   "mailbox": "INBOX",
   "pollIntervalSeconds": 60,
   "dbPath": "./mailhooks.db",
+  "logLevel": "info",
+  "logFormat": "auto",
   "routes": [
     {
       "address": "alerts@example.com",
